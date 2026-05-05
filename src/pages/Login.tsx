@@ -6,22 +6,33 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import logoImg from "@/assets/gama-logo.png";
 
 const Login = () => {
   const [id, setId] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { login } = useAuth();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (id && password) {
-      localStorage.setItem("gama-auth", JSON.stringify({ id, loggedIn: true }));
+    if (!id || !password) {
+      toast({ title: "Erro", description: "Preencha todos os campos.", variant: "destructive" });
+      return;
+    }
+    setIsLoading(true);
+    setErrorMsg(null);
+    const result = await login(id, password);
+    setIsLoading(false);
+    if (result.success) {
       toast({ title: "Acesso autorizado", description: "Bem-vindo ao sistema GAMA." });
       navigate("/dashboard");
     } else {
-      toast({ title: "Erro", description: "Preencha todos os campos.", variant: "destructive" });
+      setErrorMsg(result.error ?? "Erro desconhecido.");
     }
   };
 
@@ -66,6 +77,7 @@ const Login = () => {
                   onChange={(e) => setId(e.target.value)}
                   placeholder="Seu ID"
                   className="bg-muted/50 pl-10 border-border placeholder:text-muted-foreground/50"
+                  disabled={isLoading}
                 />
               </div>
             </div>
@@ -83,14 +95,32 @@ const Login = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   className="bg-muted/50 pl-10 border-border placeholder:text-muted-foreground/50"
+                  disabled={isLoading}
                 />
               </div>
             </div>
 
-            <Button type="submit" className="glow-green w-full bg-primary font-display text-xs tracking-widest hover:bg-primary/80">
-              <Shield className="mr-2 h-4 w-4" />
-              ENTRAR
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="glow-green w-full bg-primary font-display text-xs tracking-widest hover:bg-primary/80"
+            >
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  VERIFICANDO...
+                </span>
+              ) : (
+                <>
+                  <Shield className="mr-2 h-4 w-4" />
+                  ENTRAR
+                </>
+              )}
             </Button>
+
+            {errorMsg && (
+              <p className="text-center text-xs text-destructive">{errorMsg}</p>
+            )}
           </form>
 
           <div className="mt-6 text-center">

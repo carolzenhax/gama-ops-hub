@@ -1,5 +1,5 @@
-import { ReactNode, useEffect } from "react";
-import { useNavigate, Link, useLocation } from "react-router-dom";
+import { ReactNode } from "react";
+import { Link, useLocation } from "react-router-dom";
 import {
   Home, BookOpen, Users, FileText, Image, Truck, Crosshair, LogOut, Menu, Shield,
 } from "lucide-react";
@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import logoImg from "@/assets/gama-logo.png";
+import { useAuth } from "@/contexts/AuthContext";
+import { canAccess } from "@/lib/permissions";
 
 const navItems = [
   { to: "/dashboard", icon: Home, label: "Home" },
@@ -19,19 +21,13 @@ const navItems = [
 ];
 
 const DashboardLayout = ({ children }: { children: ReactNode }) => {
-  const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user, logout } = useAuth();
 
-  useEffect(() => {
-    const auth = localStorage.getItem("gama-auth");
-    if (!auth) navigate("/login");
-  }, [navigate]);
-
-  const handleLogout = () => {
-    localStorage.removeItem("gama-auth");
-    navigate("/login");
-  };
+  const visibleNavItems = user
+    ? navItems.filter((item) => canAccess(user.papel, item.to))
+    : [];
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -56,7 +52,7 @@ const DashboardLayout = ({ children }: { children: ReactNode }) => {
         </div>
 
         <nav className="flex-1 space-y-1 p-3">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const active = location.pathname === item.to;
             return (
               <Link
@@ -77,8 +73,14 @@ const DashboardLayout = ({ children }: { children: ReactNode }) => {
           })}
         </nav>
 
-        <div className="border-t border-border p-3">
-          <Button variant="ghost" onClick={handleLogout} className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground">
+        <div className="border-t border-border p-3 space-y-2">
+          {user && (
+            <div className="px-3 py-1.5">
+              <p className="text-sm font-medium text-foreground truncate">{user.nome}</p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{user.papel}</p>
+            </div>
+          )}
+          <Button variant="ghost" onClick={logout} className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground">
             <LogOut className="h-4 w-4" />
             Sair
           </Button>

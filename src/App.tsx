@@ -3,6 +3,8 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/contexts/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -17,27 +19,63 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const ALL_ROLES = ["admin", "operador", "visitante"] as const;
+const STAFF_ROLES = ["admin", "operador"] as const;
+const VISITOR_ROLES = ["admin", "operador", "visitante"] as const;
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/inscricoes" element={<Inscricoes />} />
-          <Route path="/manual" element={<DashboardLayout><Manual /></DashboardLayout>} />
-          <Route path="/dashboard" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
-          <Route path="/dashboard/manual" element={<DashboardLayout><Manual /></DashboardLayout>} />
-          <Route path="/dashboard/membros" element={<DashboardLayout><Membros /></DashboardLayout>} />
-          <Route path="/dashboard/inscricoes" element={<DashboardLayout><Inscricoes /></DashboardLayout>} />
-          <Route path="/dashboard/galeria" element={<DashboardLayout><Galeria /></DashboardLayout>} />
-          <Route path="/dashboard/viatura" element={<DashboardLayout><Viatura /></DashboardLayout>} />
-          <Route path="/dashboard/tatica" element={<DashboardLayout><Tatica /></DashboardLayout>} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/inscricoes" element={<Inscricoes />} />
+            <Route path="/manual" element={<DashboardLayout><Manual /></DashboardLayout>} />
+
+            <Route path="/dashboard" element={
+              <ProtectedRoute allowedRoles={[...VISITOR_ROLES]}>
+                <DashboardLayout><Dashboard /></DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/dashboard/manual" element={
+              <ProtectedRoute allowedRoles={[...VISITOR_ROLES]}>
+                <DashboardLayout><Manual /></DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/dashboard/galeria" element={
+              <ProtectedRoute allowedRoles={[...VISITOR_ROLES]}>
+                <DashboardLayout><Galeria /></DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/dashboard/membros" element={
+              <ProtectedRoute allowedRoles={[...STAFF_ROLES]}>
+                <DashboardLayout><Membros /></DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/dashboard/inscricoes" element={
+              <ProtectedRoute allowedRoles={[...STAFF_ROLES]}>
+                <DashboardLayout><Inscricoes /></DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/dashboard/viatura" element={
+              <ProtectedRoute allowedRoles={[...STAFF_ROLES]}>
+                <DashboardLayout><Viatura /></DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/dashboard/tatica" element={
+              <ProtectedRoute allowedRoles={[...STAFF_ROLES]}>
+                <DashboardLayout><Tatica /></DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
