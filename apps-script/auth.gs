@@ -1,13 +1,12 @@
 // Google Apps Script — Web App de autenticação GAMA
 // Como publicar:
-//   1. Abra o editor em script.google.com
-//   2. Cole este código
-//   3. Ajuste SHEET_ID e SHEET_NAME abaixo
+//   1. Abra a planilha no Google Sheets
+//   2. Extensões > Apps Script
+//   3. Cole este código (substitui o que estiver lá)
 //   4. Clique em "Implantar" > "Nova implantação" > Tipo: App da Web
 //   5. Executar como: Eu | Quem pode acessar: Qualquer pessoa
-//   6. Copie a URL e coloque em VITE_APPS_SCRIPT_URL no .env.local
+//   6. Copie a URL e coloque em VITE_APPS_SCRIPT_URL no .env
 
-var SHEET_ID = "SEU_GOOGLE_SHEET_ID_AQUI";
 var SHEET_NAME = "Usuarios"; // nome da aba na planilha
 
 // Estrutura esperada da planilha (linha 1 = cabeçalho):
@@ -22,7 +21,7 @@ function doGet(e) {
   }
 
   try {
-    var sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHEET_NAME);
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
     var rows = sheet.getDataRange().getValues();
 
     for (var i = 1; i < rows.length; i++) {
