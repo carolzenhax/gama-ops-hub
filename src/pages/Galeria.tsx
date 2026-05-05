@@ -1,31 +1,68 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
+import { X, Plus, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 import heroImg from "@/assets/hero-gama.jpg";
 import viaturaImg from "@/assets/viatura-ram.jpg";
 
 const categories = ["Todas", "Operações", "Treinamentos", "Viaturas", "Equipe"];
+const categoryOptions = ["Operações", "Treinamentos", "Viaturas", "Equipe"];
 
-const photos = [
-  { src: heroImg, category: "Equipe", title: "Formação tática" },
-  { src: viaturaImg, category: "Viaturas", title: "RAM 4x4 Tática" },
-  { src: heroImg, category: "Operações", title: "Operação Tempestade" },
-  { src: viaturaImg, category: "Viaturas", title: "Viatura em campo" },
-  { src: heroImg, category: "Treinamentos", title: "Treinamento noturno" },
-  { src: viaturaImg, category: "Operações", title: "Patrulha montanhosa" },
+interface Photo { id: string; src: string; category: string; title: string; isDefault?: boolean; }
+
+const DEFAULT_PHOTOS: Photo[] = [
+  { id: "d1", src: heroImg, category: "Equipe", title: "Formação tática", isDefault: true },
+  { id: "d2", src: viaturaImg, category: "Viaturas", title: "RAM 4x4 Tática", isDefault: true },
+  { id: "d3", src: heroImg, category: "Operações", title: "Operação Tempestade", isDefault: true },
+  { id: "d4", src: viaturaImg, category: "Viaturas", title: "Viatura em campo", isDefault: true },
+  { id: "d5", src: heroImg, category: "Treinamentos", title: "Treinamento noturno", isDefault: true },
+  { id: "d6", src: viaturaImg, category: "Operações", title: "Patrulha montanhosa", isDefault: true },
 ];
 
+const EMPTY_FORM = { src: "", title: "", category: "Operações" };
+
 const Galeria = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.papel === "admin";
+  const [customPhotos, setCustomPhotos] = useLocalStorage<Photo[]>("gama-galeria-custom", []);
   const [filter, setFilter] = useState("Todas");
   const [lightbox, setLightbox] = useState<number | null>(null);
-  const filtered = filter === "Todas" ? photos : photos.filter((p) => p.category === filter);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  const allPhotos = [...DEFAULT_PHOTOS, ...customPhotos];
+  const filtered = filter === "Todas" ? allPhotos : allPhotos.filter((p) => p.category === filter);
+
+  const handleAdd = () => {
+    if (!form.src.trim() || !form.title.trim()) return;
+    setCustomPhotos((prev) => [...prev, { id: Date.now().toString(), ...form }]);
+    setForm(EMPTY_FORM);
+    setDialogOpen(false);
+  };
+
+  const handleDelete = (id: string) => {
+    setCustomPhotos((prev) => prev.filter((p) => p.id !== id));
+    setLightbox(null);
+  };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold tracking-wider">Galeria</h1>
-        <p className="text-sm text-muted-foreground">Registros visuais da unidade</p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-bold tracking-wider">Galeria</h1>
+          <p className="text-sm text-muted-foreground">Registros visuais da unidade</p>
+        </div>
+        {isAdmin && (
+          <Button size="sm" variant="outline" onClick={() => setDialogOpen(true)} className="gap-1.5 text-xs">
+            <Plus className="h-3.5 w-3.5" /> Adicionar Foto
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -46,8 +83,8 @@ const Galeria = () => {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map((photo, i) => (
           <motion.div
-            key={i}
-            className="group cursor-pointer overflow-hidden rounded-xl border border-border"
+            key={photo.id}
+            className="group relative cursor-pointer overflow-hidden rounded-xl border border-border"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: i * 0.08 }}
@@ -66,6 +103,14 @@ const Galeria = () => {
                 <p className="text-[10px] uppercase text-muted-foreground">{photo.category}</p>
               </div>
             </div>
+            {isAdmin && !photo.isDefault && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDelete(photo.id); }}
+                className="absolute right-2 top-2 rounded-full bg-background/80 p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
           </motion.div>
         ))}
       </div>
@@ -94,6 +139,39 @@ const Galeria = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Add photo dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display tracking-wider">Adicionar Foto</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">URL da Imagem</Label>
+              <Input value={form.src} onChange={(e) => setForm((f) => ({ ...f, src: e.target.value }))} placeholder="https://..." className="bg-muted/50" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Título</Label>
+              <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Título da foto" className="bg-muted/50" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Categoria</Label>
+              <select
+                value={form.category}
+                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground"
+              >
+                {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleAdd}>Adicionar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

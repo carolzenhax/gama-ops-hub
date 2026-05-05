@@ -1,26 +1,68 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Users, Filter } from "lucide-react";
+import { Users, Filter, Plus, Pencil, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
-const membersData = [
-  { name: "Cpt. Rodrigo Almeida", cargo: "Comandante", classe: "Oficial" },
-  { name: "Ten. Marcos Vieira", cargo: "Subcomandante", classe: "Oficial" },
-  { name: "Sgt. Lucas Ferreira", cargo: "Chefe de Operações", classe: "Graduado" },
-  { name: "Sgt. Ana Torres", cargo: "Líder de Equipe Alpha", classe: "Graduado" },
-  { name: "Cb. Pedro Santos", cargo: "Operador Sênior", classe: "Graduado" },
-  { name: "Cb. Rafael Mendes", cargo: "Operador Sênior", classe: "Graduado" },
-  { name: "Sd. João Silva", cargo: "Operador", classe: "Praça" },
-  { name: "Sd. Maria Oliveira", cargo: "Operadora", classe: "Praça" },
-  { name: "Sd. Felipe Costa", cargo: "Operador", classe: "Praça" },
-  { name: "Sd. Bruno Lima", cargo: "Aspirante", classe: "Praça" },
+interface Membro { id: string; name: string; cargo: string; classe: string; }
+
+const DEFAULT_MEMBERS: Membro[] = [
+  { id: "1", name: "Cpt. Rodrigo Almeida", cargo: "Comandante", classe: "Oficial" },
+  { id: "2", name: "Ten. Marcos Vieira", cargo: "Subcomandante", classe: "Oficial" },
+  { id: "3", name: "Sgt. Lucas Ferreira", cargo: "Chefe de Operações", classe: "Graduado" },
+  { id: "4", name: "Sgt. Ana Torres", cargo: "Líder de Equipe Alpha", classe: "Graduado" },
+  { id: "5", name: "Cb. Pedro Santos", cargo: "Operador Sênior", classe: "Graduado" },
+  { id: "6", name: "Cb. Rafael Mendes", cargo: "Operador Sênior", classe: "Graduado" },
+  { id: "7", name: "Sd. João Silva", cargo: "Operador", classe: "Praça" },
+  { id: "8", name: "Sd. Maria Oliveira", cargo: "Operadora", classe: "Praça" },
+  { id: "9", name: "Sd. Felipe Costa", cargo: "Operador", classe: "Praça" },
+  { id: "10", name: "Sd. Bruno Lima", cargo: "Aspirante", classe: "Praça" },
 ];
 
 const classes = ["Todos", "Oficial", "Graduado", "Praça"];
+const classeOptions = ["Oficial", "Graduado", "Praça"];
+
+const EMPTY_FORM = { name: "", cargo: "", classe: "Praça" };
 
 const Membros = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.papel === "admin";
+  const [members, setMembers] = useLocalStorage<Membro[]>("gama-membros", DEFAULT_MEMBERS);
   const [filter, setFilter] = useState("Todos");
-  const filtered = filter === "Todos" ? membersData : membersData.filter((m) => m.classe === filter);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Membro | null>(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  const filtered = filter === "Todos" ? members : members.filter((m) => m.classe === filter);
+
+  const openAdd = () => {
+    setEditing(null);
+    setForm(EMPTY_FORM);
+    setDialogOpen(true);
+  };
+
+  const openEdit = (m: Membro) => {
+    setEditing(m);
+    setForm({ name: m.name, cargo: m.cargo, classe: m.classe });
+    setDialogOpen(true);
+  };
+
+  const handleSave = () => {
+    if (!form.name.trim() || !form.cargo.trim()) return;
+    if (editing) {
+      setMembers((prev) => prev.map((m) => (m.id === editing.id ? { ...m, ...form } : m)));
+    } else {
+      setMembers((prev) => [...prev, { id: Date.now().toString(), ...form }]);
+    }
+    setDialogOpen(false);
+  };
+
+  const handleDelete = (id: string) => setMembers((prev) => prev.filter((m) => m.id !== id));
 
   return (
     <div className="space-y-6">
@@ -29,7 +71,7 @@ const Membros = () => {
           <h1 className="font-display text-2xl font-bold tracking-wider">Membros</h1>
           <p className="text-sm text-muted-foreground">Efetivo da unidade GAMA</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Filter className="h-4 w-4 text-muted-foreground" />
           {classes.map((c) => (
             <button
@@ -43,13 +85,18 @@ const Membros = () => {
               {c}
             </button>
           ))}
+          {isAdmin && (
+            <Button size="sm" variant="outline" onClick={openAdd} className="gap-1.5 text-xs">
+              <Plus className="h-3.5 w-3.5" /> Novo Membro
+            </Button>
+          )}
         </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map((m, i) => (
           <motion.div
-            key={m.name}
+            key={m.id}
             className="group rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40"
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
@@ -59,17 +106,59 @@ const Membros = () => {
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/20">
                 <Users className="h-5 w-5 text-primary-foreground" />
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="font-medium text-foreground">{m.name}</p>
                 <p className="text-sm text-muted-foreground">{m.cargo}</p>
                 <span className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
                   {m.classe}
                 </span>
               </div>
+              {isAdmin && (
+                <div className="flex shrink-0 gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button onClick={() => openEdit(m)} className="text-muted-foreground transition-colors hover:text-foreground">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => handleDelete(m.id)} className="text-muted-foreground transition-colors hover:text-destructive">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
           </motion.div>
         ))}
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display tracking-wider">{editing ? "Editar Membro" : "Novo Membro"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Nome</Label>
+              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Ex: Sgt. João Silva" className="bg-muted/50" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Cargo</Label>
+              <Input value={form.cargo} onChange={(e) => setForm((f) => ({ ...f, cargo: e.target.value }))} placeholder="Ex: Operador Sênior" className="bg-muted/50" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Classe</Label>
+              <select
+                value={form.classe}
+                onChange={(e) => setForm((f) => ({ ...f, classe: e.target.value }))}
+                className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground"
+              >
+                {classeOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSave}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

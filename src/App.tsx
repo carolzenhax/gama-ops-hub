@@ -14,14 +14,14 @@ import Inscricoes from "./pages/Inscricoes";
 import Galeria from "./pages/Galeria";
 import Viatura from "./pages/Viatura";
 import Tatica from "./pages/Tatica";
+import Curso from "./pages/Curso";
 import DashboardLayout from "./components/DashboardLayout";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const ALL_ROLES = ["admin", "operador", "visitante"] as const;
 const STAFF_ROLES = ["admin", "operador"] as const;
-const VISITOR_ROLES = ["admin", "operador", "visitante"] as const;
+const ALL_ROLES = ["admin", "operador", "visitante"] as const;
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -37,18 +37,23 @@ const App = () => (
             <Route path="/manual" element={<DashboardLayout><Manual /></DashboardLayout>} />
 
             <Route path="/dashboard" element={
-              <ProtectedRoute allowedRoles={[...VISITOR_ROLES]}>
+              <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
                 <DashboardLayout><Dashboard /></DashboardLayout>
               </ProtectedRoute>
             } />
             <Route path="/dashboard/manual" element={
-              <ProtectedRoute allowedRoles={[...VISITOR_ROLES]}>
+              <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
                 <DashboardLayout><Manual /></DashboardLayout>
               </ProtectedRoute>
             } />
             <Route path="/dashboard/galeria" element={
-              <ProtectedRoute allowedRoles={[...VISITOR_ROLES]}>
+              <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
                 <DashboardLayout><Galeria /></DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/dashboard/curso" element={
+              <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+                <DashboardLayout><Curso /></DashboardLayout>
               </ProtectedRoute>
             } />
             <Route path="/dashboard/membros" element={

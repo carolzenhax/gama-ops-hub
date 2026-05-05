@@ -9,6 +9,7 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "/dashboard/galeria",
     "/dashboard/viatura",
     "/dashboard/tatica",
+    "/dashboard/curso",
   ],
   operador: [
     "/dashboard",
@@ -18,11 +19,13 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "/dashboard/galeria",
     "/dashboard/viatura",
     "/dashboard/tatica",
+    "/dashboard/curso",
   ],
   visitante: [
     "/dashboard",
     "/dashboard/manual",
     "/dashboard/galeria",
+    "/dashboard/curso",
   ],
 };
 
