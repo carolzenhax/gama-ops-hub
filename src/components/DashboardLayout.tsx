@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
-  Home, BookOpen, Users, FileText, Image, Truck, Crosshair, GraduationCap, LogOut, Menu, Shield,
+  Home, BookOpen, Users, FileText, Image, Truck, Crosshair, GraduationCap, UserCog, LogOut, Menu, Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ const navItems = [
   { to: "/dashboard/galeria", icon: Image, label: "Galeria" },
   { to: "/dashboard/viatura", icon: Truck, label: "Viatura" },
   { to: "/dashboard/tatica", icon: Crosshair, label: "Tática" },
+  { to: "/dashboard/usuarios", icon: UserCog, label: "Usuários" },
 ];
 
 const DashboardLayout = ({ children }: { children: ReactNode }) => {

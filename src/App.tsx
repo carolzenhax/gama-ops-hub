@@ -15,6 +15,7 @@ import Galeria from "./pages/Galeria";
 import Viatura from "./pages/Viatura";
 import Tatica from "./pages/Tatica";
 import Curso from "./pages/Curso";
+import Usuarios from "./pages/Usuarios";
 import DashboardLayout from "./components/DashboardLayout";
 import NotFound from "./pages/NotFound";
 
@@ -74,6 +75,12 @@ const App = () => (
             <Route path="/dashboard/tatica" element={
               <ProtectedRoute allowedRoles={[...STAFF_ROLES]}>
                 <DashboardLayout><Tatica /></DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/dashboard/usuarios" element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <DashboardLayout><Usuarios /></DashboardLayout>
               </ProtectedRoute>
             } />
 

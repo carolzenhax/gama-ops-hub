@@ -10,6 +10,7 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "/dashboard/viatura",
     "/dashboard/tatica",
     "/dashboard/curso",
+    "/dashboard/usuarios",
   ],
   operador: [
     "/dashboard",
