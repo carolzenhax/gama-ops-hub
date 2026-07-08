@@ -302,17 +302,36 @@ const Operacoes = () => {
     setExportingPdf(true);
     try {
       const bg = `hsl(${getComputedStyle(document.documentElement).getPropertyValue("--background").trim()})`;
-      const canvas = await html2canvas(el, {
-        backgroundColor: bg,
-        scale: 2,
-        width: el.scrollWidth,
-        height: el.scrollHeight,
-        windowWidth: el.scrollWidth,
-        windowHeight: el.scrollHeight,
-      });
+      const scale = 2;
+      const gridRect = el.getBoundingClientRect();
+
+      // html2canvas mishandles CSS Grid when capturing multiple siblings at once (columns
+      // after the first render blank). Capture each chart panel separately instead and
+      // composite them onto one canvas at their real relative positions.
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.ceil(gridRect.width * scale);
+      canvas.height = Math.ceil(gridRect.height * scale);
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      for (const child of Array.from(el.children)) {
+        const rect = child.getBoundingClientRect();
+        const panelCanvas = await html2canvas(child as HTMLElement, { backgroundColor: null, scale });
+        ctx.drawImage(panelCanvas, (rect.left - gridRect.left) * scale, (rect.top - gridRect.top) * scale);
+      }
+
       const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [canvas.width, canvas.height] });
-      pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
+      // jsPDF's "px" unit is unreliable across versions — convert to points (72/96 px) instead,
+      // which is jsPDF's native, well-supported unit.
+      const pdfWidth = canvas.width * 0.75;
+      const pdfHeight = canvas.height * 0.75;
+      const pdf = new jsPDF({
+        orientation: pdfWidth > pdfHeight ? "landscape" : "portrait",
+        unit: "pt",
+        format: [pdfWidth, pdfHeight],
+      });
+      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
       pdf.save(mesFiltro ? `operacoes-graficos-${mesFiltro}.pdf` : "operacoes-graficos.pdf");
     } finally {
       setExportingPdf(false);
