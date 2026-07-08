@@ -297,11 +297,19 @@ const Operacoes = () => {
   };
 
   const handleExportPdf = async () => {
-    if (!chartsRef.current) return;
+    const el = chartsRef.current;
+    if (!el) return;
     setExportingPdf(true);
     try {
       const bg = `hsl(${getComputedStyle(document.documentElement).getPropertyValue("--background").trim()})`;
-      const canvas = await html2canvas(chartsRef.current, { backgroundColor: bg, scale: 2 });
+      const canvas = await html2canvas(el, {
+        backgroundColor: bg,
+        scale: 2,
+        width: el.scrollWidth,
+        height: el.scrollHeight,
+        windowWidth: el.scrollWidth,
+        windowHeight: el.scrollHeight,
+      });
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [canvas.width, canvas.height] });
       pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
