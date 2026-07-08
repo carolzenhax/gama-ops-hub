@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { format, parseISO } from "date-fns";
-import { Target, Send, Download } from "lucide-react";
+import { Target, Send, Download, FileDown } from "lucide-react";
 import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 import {
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
@@ -215,6 +217,8 @@ const Operacoes = () => {
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [mesFiltro, setMesFiltro] = useState("");
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const chartsRef = useRef<HTMLDivElement>(null);
 
   const acaoSelecionada = acoesTipos.find((a) => a.id === form.acaoId);
   const precisaLoja = acaoSelecionada?.nome === "Loja de Departamento";
@@ -290,6 +294,21 @@ const Operacoes = () => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Operações");
     XLSX.writeFile(wb, mesFiltro ? `operacoes-${mesFiltro}.xlsx` : "operacoes-todas.xlsx");
+  };
+
+  const handleExportPdf = async () => {
+    if (!chartsRef.current) return;
+    setExportingPdf(true);
+    try {
+      const bg = `hsl(${getComputedStyle(document.documentElement).getPropertyValue("--background").trim()})`;
+      const canvas = await html2canvas(chartsRef.current, { backgroundColor: bg, scale: 2 });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [canvas.width, canvas.height] });
+      pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
+      pdf.save(mesFiltro ? `operacoes-graficos-${mesFiltro}.pdf` : "operacoes-graficos.pdf");
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   return (
@@ -426,15 +445,26 @@ const Operacoes = () => {
                     </button>
                   )}
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleExport}
-                  disabled={operacoesFiltradas.length === 0}
-                  className="gap-1.5 text-xs"
-                >
-                  <Download className="h-3.5 w-3.5" /> Exportar XLSX
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleExport}
+                    disabled={operacoesFiltradas.length === 0}
+                    className="gap-1.5 text-xs"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Exportar XLSX
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleExportPdf}
+                    disabled={operacoesFiltradas.length === 0 || exportingPdf}
+                    className="gap-1.5 text-xs"
+                  >
+                    <FileDown className="h-3.5 w-3.5" /> {exportingPdf ? "Gerando..." : "Exportar PDF"}
+                  </Button>
+                </div>
               </div>
 
               {operacoesFiltradas.length === 0 ? (
@@ -444,7 +474,7 @@ const Operacoes = () => {
                 </div>
               ) : (
                 <>
-                  <div className="grid gap-4 lg:grid-cols-2">
+                  <div ref={chartsRef} className="grid gap-4 lg:grid-cols-2 bg-background p-1">
                     <DonutChart title="N° Ações" data={acoesChartData} />
                     <DonutChart
                       title="Resultado"
