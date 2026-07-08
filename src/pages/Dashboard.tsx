@@ -9,12 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 
-const cards = [
-  { title: "Status", value: "OPERACIONAL", icon: Activity, color: "text-green-500" },
-  { title: "Efetivo Ativo", value: "28 / 32", icon: Users, color: "text-foreground" },
-  { title: "Operações (Mês)", value: "12", icon: Radio, color: "text-tactical-blue" },
-  { title: "Alertas", value: "2", icon: AlertTriangle, color: "text-accent" },
-];
+const EFETIVO_MAX = 15;
 
 interface Notice { id: string; date: string; text: string; }
 
@@ -27,11 +22,32 @@ async function fetchNotices(): Promise<Notice[]> {
   return data.map((n) => ({ id: n.id, date: n.data, text: n.texto }));
 }
 
+async function fetchMembrosCount(): Promise<number> {
+  const { data, error } = await supabase.rpc("membros_count");
+  if (error) throw error;
+  return data ?? 0;
+}
+
+async function fetchOperacoesMesCount(): Promise<number> {
+  const { data, error } = await supabase.rpc("operacoes_count_mes");
+  if (error) throw error;
+  return data ?? 0;
+}
+
 const Dashboard = () => {
   const { user } = useAuth();
   const isAdmin = user?.papel === "comando";
   const queryClient = useQueryClient();
   const { data: notices = [], isLoading } = useQuery({ queryKey: ["avisos"], queryFn: fetchNotices });
+  const { data: membrosCount = 0 } = useQuery({ queryKey: ["membros_count"], queryFn: fetchMembrosCount });
+  const { data: operacoesMesCount = 0 } = useQuery({ queryKey: ["operacoes_count_mes"], queryFn: fetchOperacoesMesCount });
+
+  const cards = [
+    { title: "Status", value: "OPERACIONAL", icon: Activity, color: "text-green-500" },
+    { title: "Efetivo Ativo", value: `${membrosCount} / ${EFETIVO_MAX}`, icon: Users, color: "text-foreground" },
+    { title: "Operações (Mês)", value: String(operacoesMesCount), icon: Radio, color: "text-tactical-blue" },
+    { title: "Alertas", value: String(notices.length), icon: AlertTriangle, color: "text-accent" },
+  ];
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["avisos"] });
 

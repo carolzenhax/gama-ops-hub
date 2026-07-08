@@ -12,8 +12,6 @@ import Manual from "./pages/Manual";
 import Membros from "./pages/Membros";
 import Inscricoes from "./pages/Inscricoes";
 import Galeria from "./pages/Galeria";
-import Viatura from "./pages/Viatura";
-import Tatica from "./pages/Tatica";
 import Curso from "./pages/Curso";
 import Operacoes from "./pages/Operacoes";
 import Usuarios from "./pages/Usuarios";
@@ -68,17 +66,6 @@ const App = () => (
                 <DashboardLayout><Inscricoes /></DashboardLayout>
               </ProtectedRoute>
             } />
-            <Route path="/dashboard/viatura" element={
-              <ProtectedRoute allowedRoles={[...STAFF_ROLES]}>
-                <DashboardLayout><Viatura /></DashboardLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/dashboard/tatica" element={
-              <ProtectedRoute allowedRoles={[...STAFF_ROLES]}>
-                <DashboardLayout><Tatica /></DashboardLayout>
-              </ProtectedRoute>
-            } />
-
             <Route path="/dashboard/operacoes" element={
               <ProtectedRoute allowedRoles={[...STAFF_ROLES]}>
                 <DashboardLayout><Operacoes /></DashboardLayout>
