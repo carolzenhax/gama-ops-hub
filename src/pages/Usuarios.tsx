@@ -1,54 +1,44 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { UserCog, Plus, Pencil, Trash2, RefreshCw, Lock, ShieldAlert } from "lucide-react";
+import { UserCog, Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { useAuth, callApi } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 
 interface UserRow { id: string; nome: string; papel: string; }
 
-const PAPEL_OPTIONS = ["admin", "operador", "visitante"];
+const PAPEL_OPTIONS = ["comando", "membro", "visitante"];
 
 const PAPEL_COLORS: Record<string, string> = {
-  admin:     "bg-accent/20 text-accent",
-  operador:  "bg-primary/20 text-primary-foreground",
+  comando:   "bg-accent/20 text-accent",
+  membro:    "bg-primary/20 text-primary-foreground",
   visitante: "bg-muted text-muted-foreground",
 };
 
-const EMPTY_FORM = { id: "", nome: "", papel: "operador", senha: "", confirmSenhaInput: "" };
+const EMPTY_FORM = { id: "", nome: "", papel: "membro", senha: "", confirmSenhaInput: "" };
+
+async function callManageUsers(payload: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke("manage-users", { body: payload });
+  if (error) return { success: false, error: "Erro de conexão." };
+  return data;
+}
 
 const Usuarios = () => {
-  const { user, adminSenha, confirmSenha } = useAuth();
+  const { user } = useAuth();
 
-  // ── Confirmação de identidade (após refresh de página) ──────────────────
-  const [senhaInput, setSenhaInput] = useState("");
-  const [confirmError, setConfirmError] = useState("");
-  const [confirmLoading, setConfirmLoading] = useState(false);
-
-  const needsConfirm = !adminSenha;
-
-  const handleConfirmSenha = async () => {
-    setConfirmLoading(true);
-    setConfirmError("");
-    const ok = await confirmSenha(senhaInput);
-    setConfirmLoading(false);
-    if (!ok) setConfirmError("Senha incorreta.");
-  };
-
-  // ── Dados ────────────────────────────────────────────────────────────────
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState("");
 
   const loadUsers = useCallback(async () => {
-    if (!user || !adminSenha) return;
     setLoading(true);
     setApiError("");
     try {
-      const data = await callApi({ action: "list", id: user.id, senha: adminSenha });
+      const data = await callManageUsers({ action: "list" });
       if (data.success) setUsers(data.users);
       else setApiError(data.error ?? "Erro ao carregar usuários.");
     } catch {
@@ -56,11 +46,11 @@ const Usuarios = () => {
     } finally {
       setLoading(false);
     }
-  }, [user, adminSenha]);
+  }, []);
 
   useEffect(() => {
-    if (!needsConfirm) loadUsers();
-  }, [needsConfirm, loadUsers]);
+    loadUsers();
+  }, [loadUsers]);
 
   // ── Diálogo add/edit ─────────────────────────────────────────────────────
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -84,7 +74,6 @@ const Usuarios = () => {
   };
 
   const handleSave = async () => {
-    if (!user || !adminSenha) return;
     if (!form.nome.trim() || (!editing && !form.id.trim())) {
       setFormError("Preencha os campos obrigatórios.");
       return;
@@ -99,15 +88,14 @@ const Usuarios = () => {
     try {
       let data;
       if (editing) {
-        const params: Record<string, string> = {
-          action: "update", id: user.id, senha: adminSenha,
-          targetId: editing.id, newNome: form.nome.trim(), newPapel: form.papel,
+        const payload: Record<string, unknown> = {
+          action: "update", targetId: editing.id, newNome: form.nome.trim(), newPapel: form.papel,
         };
-        if (form.senha.trim()) params.newSenha = form.senha.trim();
-        data = await callApi(params);
+        if (form.senha.trim()) payload.newSenha = form.senha.trim();
+        data = await callManageUsers(payload);
       } else {
-        data = await callApi({
-          action: "create", id: user.id, senha: adminSenha,
+        data = await callManageUsers({
+          action: "create",
           newId: form.id.trim(), newSenha: form.senha.trim(),
           newNome: form.nome.trim(), newPapel: form.papel,
         });
@@ -131,13 +119,10 @@ const Usuarios = () => {
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const handleDelete = async () => {
-    if (!deleteTarget || !user || !adminSenha) return;
+    if (!deleteTarget) return;
     setDeleteLoading(true);
     try {
-      const data = await callApi({
-        action: "delete", id: user.id, senha: adminSenha,
-        targetId: deleteTarget.id,
-      });
+      const data = await callManageUsers({ action: "delete", targetId: deleteTarget.id });
       if (data.success) {
         setDeleteTarget(null);
         loadUsers();
@@ -153,49 +138,6 @@ const Usuarios = () => {
     }
   };
 
-  // ── Tela de confirmação de identidade ────────────────────────────────────
-  if (needsConfirm) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <motion.div
-          className="w-full max-w-sm rounded-xl border border-border bg-card p-8"
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-        >
-          <div className="mb-6 flex flex-col items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/20">
-              <ShieldAlert className="h-6 w-6 text-accent" />
-            </div>
-            <h2 className="font-display text-sm font-bold tracking-wider">Confirmar Identidade</h2>
-            <p className="text-center text-xs text-muted-foreground">
-              Para acessar o gerenciamento de usuários, confirme sua senha.
-            </p>
-          </div>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Senha</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="password"
-                  value={senhaInput}
-                  onChange={(e) => setSenhaInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleConfirmSenha()}
-                  className="bg-muted/50 pl-10"
-                />
-              </div>
-            </div>
-            {confirmError && <p className="text-xs text-destructive">{confirmError}</p>}
-            <Button onClick={handleConfirmSenha} disabled={confirmLoading} className="w-full">
-              {confirmLoading ? "Verificando..." : "Confirmar"}
-            </Button>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
-
-  // ── Tela principal ───────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

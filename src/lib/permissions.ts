@@ -1,7 +1,7 @@
 import type { Role } from "@/contexts/AuthContext";
 
 export const ROLE_PERMISSIONS: Record<Role, string[]> = {
-  admin: [
+  comando: [
     "/dashboard",
     "/dashboard/manual",
     "/dashboard/membros",
@@ -10,9 +10,10 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "/dashboard/viatura",
     "/dashboard/tatica",
     "/dashboard/curso",
+    "/dashboard/operacoes",
     "/dashboard/usuarios",
   ],
-  operador: [
+  membro: [
     "/dashboard",
     "/dashboard/manual",
     "/dashboard/membros",
@@ -21,6 +22,7 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "/dashboard/viatura",
     "/dashboard/tatica",
     "/dashboard/curso",
+    "/dashboard/operacoes",
   ],
   visitante: [
     "/dashboard",

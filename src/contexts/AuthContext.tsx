@@ -1,9 +1,10 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
-export type Role = "admin" | "operador" | "visitante";
+export type Role = "comando" | "membro" | "visitante";
 
 export interface AuthUser {
-  id: string;
+  id: string; // login_id curto (ex: op02) — não é o uuid do Supabase Auth
   nome: string;
   papel: Role;
 }
@@ -11,91 +12,59 @@ export interface AuthUser {
 interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
-  adminSenha: string | null;
+  loading: boolean;
   login: (id: string, senha: string) => Promise<{ success: boolean; error?: string }>;
-  confirmSenha: (senha: string) => Promise<boolean>;
   logout: () => void;
-}
-
-const VALID_ROLES: Role[] = ["admin", "operador", "visitante"];
-const STORAGE_KEY = "gama-auth";
-
-function loadUserFromStorage(): AuthUser | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (
-      typeof parsed.id === "string" &&
-      typeof parsed.nome === "string" &&
-      VALID_ROLES.includes(parsed.papel)
-    ) {
-      return parsed as AuthUser;
-    }
-    localStorage.removeItem(STORAGE_KEY);
-    return null;
-  } catch {
-    localStorage.removeItem(STORAGE_KEY);
-    return null;
-  }
-}
-
-async function callApi(params: Record<string, string>) {
-  const url = import.meta.env.VITE_APPS_SCRIPT_URL;
-  if (!url) throw new Error("URL do servidor não configurada.");
-  const query = new URLSearchParams(params).toString();
-  const res = await fetch(`${url}?${query}`);
-  return res.json();
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function emailFromLoginId(id: string) {
+  return `${id}@gama.local`;
+}
+
+async function loadProfile(userId: string): Promise<AuthUser | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("login_id, nome, papel")
+    .eq("id", userId)
+    .single();
+  if (error || !data) return null;
+  return { id: data.login_id, nome: data.nome, papel: data.papel as Role };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => loadUserFromStorage());
-  // Senha kept in memory only — never persisted to localStorage
-  const [adminSenha, setAdminSenha] = useState<string | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      setUser(session?.user ? await loadProfile(session.user.id) : null);
+      setLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setUser(session?.user ? await loadProfile(session.user.id) : null);
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
 
   const login = async (id: string, senha: string): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const data = await callApi({ action: "login", id, senha });
-
-      if (data.success && VALID_ROLES.includes(data.papel)) {
-        const authUser: AuthUser = { id, nome: data.nome, papel: data.papel };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
-        setUser(authUser);
-        setAdminSenha(senha);
-        return { success: true };
-      }
-
-      return { success: false, error: data.error ?? "Credenciais inválidas." };
-    } catch {
-      return { success: false, error: "Erro de conexão. Tente novamente." };
-    }
-  };
-
-  // Used after a page refresh when adminSenha was lost from memory
-  const confirmSenha = async (senha: string): Promise<boolean> => {
-    if (!user) return false;
-    try {
-      const data = await callApi({ action: "login", id: user.id, senha });
-      if (data.success) {
-        setAdminSenha(senha);
-        return true;
-      }
-      return false;
-    } catch {
-      return false;
-    }
+    const { error } = await supabase.auth.signInWithPassword({
+      email: emailFromLoginId(id),
+      password: senha,
+    });
+    if (error) return { success: false, error: "Credenciais inválidas." };
+    return { success: true };
   };
 
   const logout = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    setUser(null);
-    setAdminSenha(null);
+    supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: user !== null, adminSenha, login, confirmSenha, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: user !== null, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
@@ -106,5 +75,3 @@ export function useAuth(): AuthContextValue {
   if (!ctx) throw new Error("useAuth deve ser usado dentro de AuthProvider");
   return ctx;
 }
-
-export { callApi };

@@ -1,36 +1,52 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Plus, Trash2 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import heroImg from "@/assets/hero-gama.jpg";
-import viaturaImg from "@/assets/viatura-ram.jpg";
+import { supabase } from "@/lib/supabaseClient";
 
 const categories = ["Todas", "Operações", "Treinamentos", "Viaturas", "Equipe"];
 const categoryOptions = ["Operações", "Treinamentos", "Viaturas", "Equipe"];
 
 interface Photo { id: string; src: string; category: string; title: string; }
 
-const DEFAULT_PHOTOS: Photo[] = [
-  { id: "d1", src: heroImg, category: "Equipe", title: "Formação tática" },
-  { id: "d2", src: viaturaImg, category: "Viaturas", title: "RAM 4x4 Tática" },
-  { id: "d3", src: heroImg, category: "Operações", title: "Operação Tempestade" },
-  { id: "d4", src: viaturaImg, category: "Viaturas", title: "Viatura em campo" },
-  { id: "d5", src: heroImg, category: "Treinamentos", title: "Treinamento noturno" },
-  { id: "d6", src: viaturaImg, category: "Operações", title: "Patrulha montanhosa" },
-];
-
 const EMPTY_FORM = { src: "", title: "", category: "Operações" };
+
+async function fetchPhotos(): Promise<Photo[]> {
+  const { data, error } = await supabase.from("galeria_fotos").select("id, src, categoria, titulo");
+  if (error) throw error;
+  return data.map((p) => ({ id: p.id, src: p.src, category: p.categoria, title: p.titulo }));
+}
 
 const Galeria = () => {
   const { user } = useAuth();
-  const isAdmin = user?.papel === "admin";
-  const [photos, setPhotos] = useLocalStorage<Photo[]>("gama-galeria", DEFAULT_PHOTOS);
+  const isAdmin = user?.papel === "comando";
+  const queryClient = useQueryClient();
+  const { data: photos = [], isLoading } = useQuery({ queryKey: ["galeria_fotos"], queryFn: fetchPhotos });
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["galeria_fotos"] });
+
+  const addPhoto = useMutation({
+    mutationFn: async (form: typeof EMPTY_FORM) => {
+      const { error } = await supabase.from("galeria_fotos").insert({ src: form.src, categoria: form.category, titulo: form.title });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const deletePhoto = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("galeria_fotos").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
   const [filter, setFilter] = useState("Todas");
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -40,13 +56,13 @@ const Galeria = () => {
 
   const handleAdd = () => {
     if (!form.src.trim() || !form.title.trim()) return;
-    setPhotos((prev) => [...prev, { id: Date.now().toString(), ...form }]);
+    addPhoto.mutate(form);
     setForm(EMPTY_FORM);
     setDialogOpen(false);
   };
 
   const handleDelete = (id: string) => {
-    setPhotos((prev) => prev.filter((p) => p.id !== id));
+    deletePhoto.mutate(id);
     setLightbox(null);
   };
 
@@ -80,7 +96,9 @@ const Galeria = () => {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((photo, i) => (
+        {isLoading
+          ? [1, 2, 3].map((i) => <div key={i} className="aspect-video animate-pulse rounded-xl border border-border bg-muted/30" />)
+          : filtered.map((photo, i) => (
           <motion.div
             key={photo.id}
             className="group relative cursor-pointer overflow-hidden rounded-xl border border-border"

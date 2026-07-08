@@ -1,28 +1,41 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Pencil, Check, X } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { supabase } from "@/lib/supabaseClient";
 
 interface Section { id: string; title: string; content: string; }
 
-const DEFAULT_SECTIONS: Section[] = [
-  { id: "sobre", title: "Sobre a GAMA", content: "O Grupamento de Ações em Montanha e Ambiente Árido (GAMA) é uma unidade tática de elite da Polícia, especializada em operações em terrenos extremos. Criada com o objetivo de atuar em regiões montanhosas e áridas, a GAMA conta com operadores altamente treinados em sobrevivência, combate tático e resgate em condições adversas." },
-  { id: "atribuicoes", title: "Atribuições", content: "• Operações táticas em terreno montanhoso e desértico\n• Resgate de reféns em áreas remotas\n• Patrulhamento e vigilância em regiões de difícil acesso\n• Apoio a operações especiais de outras unidades\n• Treinamento e capacitação de efetivo policial\n• Escolta tática de alto risco" },
-  { id: "hierarquia", title: "Hierarquia", content: "COMANDANTE — Oficial responsável pela unidade\nSUBCOMANDANTE — Segundo em comando\nCHEFE DE OPERAÇÕES — Coordena missões táticas\nLÍDER DE EQUIPE — Comanda grupos operacionais\nOPERADOR SÊNIOR — Experiência avançada\nOPERADOR — Membro efetivo da unidade\nASPIRANTE — Em período de avaliação" },
-  { id: "regras", title: "Regras", content: "1. Obediência à cadeia de comando\n2. Sigilo operacional absoluto\n3. Pontualidade em todas as convocações\n4. Manutenção rigorosa de equipamentos\n5. Proibido uso de informações operacionais fora do sistema\n6. Respeito mútuo entre todos os membros\n7. Participação obrigatória em treinamentos semanais" },
-  { id: "viatura", title: "Sistema de Viatura", content: "A GAMA opera com viaturas táticas 4x4 preparadas para terrenos extremos. Cada viatura comporta até 6 operadores com funções definidas (P1 a P6). As viaturas são equipadas com comunicação criptografada, kit de primeiros socorros avançado e armamento tático." },
-  { id: "abordagem", title: "Abordagem Tática", content: "O protocolo de abordagem tática segue uma sequência operacional rigorosa:\n\n1. Reconhecimento do terreno\n2. Posicionamento da equipe\n3. Comunicação com central\n4. Aproximação controlada\n5. Contenção e neutralização\n6. Verificação de segurança\n7. Relatório pós-operação" },
-  { id: "responsabilidades", title: "Responsabilidades", content: "Cada membro da GAMA carrega a responsabilidade de representar a unidade com excelência. Isso inclui: manter a forma física em nível operacional, cumprir escalas de serviço, reportar irregularidades, zelar pelo patrimônio e contribuir para a evolução constante da unidade." },
-];
+// Ordem de exibição no menu — a tabela não tem coluna de ordem própria,
+// as 7 seções são fixas e nunca criadas/removidas pela UI.
+const SECTION_ORDER = ["sobre", "atribuicoes", "hierarquia", "regras", "viatura", "abordagem", "responsabilidades"];
+
+async function fetchSections(): Promise<Section[]> {
+  const { data, error } = await supabase.from("manual_secoes").select("id, titulo, conteudo");
+  if (error) throw error;
+  return data
+    .map((s) => ({ id: s.id, title: s.titulo, content: s.conteudo }))
+    .sort((a, b) => SECTION_ORDER.indexOf(a.id) - SECTION_ORDER.indexOf(b.id));
+}
 
 const Manual = () => {
   const { user } = useAuth();
-  const isAdmin = user?.papel === "admin";
-  const [sections, setSections] = useLocalStorage<Section[]>("gama-manual", DEFAULT_SECTIONS);
+  const isAdmin = user?.papel === "comando";
+  const queryClient = useQueryClient();
+  const { data: sections = [], isLoading } = useQuery({ queryKey: ["manual_secoes"], queryFn: fetchSections });
+
+  const updateSection = useMutation({
+    mutationFn: async ({ id, content }: { id: string; content: string }) => {
+      const { error } = await supabase.from("manual_secoes").update({ conteudo: content }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["manual_secoes"] }),
+  });
+
   const [active, setActive] = useState("sobre");
   const [editingContent, setEditingContent] = useState(false);
   const [draft, setDraft] = useState("");
@@ -35,11 +48,24 @@ const Manual = () => {
   };
 
   const saveEdit = () => {
-    setSections((prev) => prev.map((s) => (s.id === active ? { ...s, content: draft } : s)));
+    updateSection.mutate({ id: active, content: draft });
     setEditingContent(false);
   };
 
   const cancelEdit = () => setEditingContent(false);
+
+  if (isLoading || !current) {
+    return (
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <div className="shrink-0 space-y-2 lg:w-56">
+          {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+            <div key={i} className="h-9 animate-pulse rounded-lg bg-muted/30" />
+          ))}
+        </div>
+        <div className="h-64 flex-1 animate-pulse rounded-xl border border-border bg-muted/30" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row">

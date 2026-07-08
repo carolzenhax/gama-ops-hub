@@ -1,38 +1,58 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Users, Filter, Plus, Pencil, Trash2 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { supabase } from "@/lib/supabaseClient";
 
 interface Membro { id: string; name: string; cargo: string; classe: string; }
-
-const DEFAULT_MEMBERS: Membro[] = [
-  { id: "1", name: "Cpt. Rodrigo Almeida", cargo: "Comandante", classe: "Oficial" },
-  { id: "2", name: "Ten. Marcos Vieira", cargo: "Subcomandante", classe: "Oficial" },
-  { id: "3", name: "Sgt. Lucas Ferreira", cargo: "Chefe de Operações", classe: "Graduado" },
-  { id: "4", name: "Sgt. Ana Torres", cargo: "Líder de Equipe Alpha", classe: "Graduado" },
-  { id: "5", name: "Cb. Pedro Santos", cargo: "Operador Sênior", classe: "Graduado" },
-  { id: "6", name: "Cb. Rafael Mendes", cargo: "Operador Sênior", classe: "Graduado" },
-  { id: "7", name: "Sd. João Silva", cargo: "Operador", classe: "Praça" },
-  { id: "8", name: "Sd. Maria Oliveira", cargo: "Operadora", classe: "Praça" },
-  { id: "9", name: "Sd. Felipe Costa", cargo: "Operador", classe: "Praça" },
-  { id: "10", name: "Sd. Bruno Lima", cargo: "Aspirante", classe: "Praça" },
-];
 
 const classes = ["Todos", "Oficial", "Graduado", "Praça"];
 const classeOptions = ["Oficial", "Graduado", "Praça"];
 
 const EMPTY_FORM = { name: "", cargo: "", classe: "Praça" };
 
+async function fetchMembers(): Promise<Membro[]> {
+  const { data, error } = await supabase.from("membros").select("id, nome, cargo, classe");
+  if (error) throw error;
+  return data.map((m) => ({ id: m.id, name: m.nome, cargo: m.cargo, classe: m.classe }));
+}
+
 const Membros = () => {
   const { user } = useAuth();
-  const isAdmin = user?.papel === "admin";
-  const [members, setMembers] = useLocalStorage<Membro[]>("gama-membros", DEFAULT_MEMBERS);
+  const isAdmin = user?.papel === "comando";
+  const queryClient = useQueryClient();
+  const { data: members = [], isLoading } = useQuery({ queryKey: ["membros"], queryFn: fetchMembers });
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["membros"] });
+
+  const saveMember = useMutation({
+    mutationFn: async ({ id, ...form }: { id?: string } & typeof EMPTY_FORM) => {
+      const payload = { nome: form.name, cargo: form.cargo, classe: form.classe };
+      if (id) {
+        const { error } = await supabase.from("membros").update(payload).eq("id", id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("membros").insert(payload);
+        if (error) throw error;
+      }
+    },
+    onSuccess: invalidate,
+  });
+
+  const deleteMember = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("membros").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
   const [filter, setFilter] = useState("Todos");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Membro | null>(null);
@@ -54,15 +74,11 @@ const Membros = () => {
 
   const handleSave = () => {
     if (!form.name.trim() || !form.cargo.trim()) return;
-    if (editing) {
-      setMembers((prev) => prev.map((m) => (m.id === editing.id ? { ...m, ...form } : m)));
-    } else {
-      setMembers((prev) => [...prev, { id: Date.now().toString(), ...form }]);
-    }
+    saveMember.mutate({ id: editing?.id, ...form });
     setDialogOpen(false);
   };
 
-  const handleDelete = (id: string) => setMembers((prev) => prev.filter((m) => m.id !== id));
+  const handleDelete = (id: string) => deleteMember.mutate(id);
 
   return (
     <div className="space-y-6">
@@ -94,7 +110,9 @@ const Membros = () => {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((m, i) => (
+        {isLoading
+          ? [1, 2, 3, 4, 5, 6].map((i) => <div key={i} className="h-20 animate-pulse rounded-xl border border-border bg-muted/30" />)
+          : filtered.map((m, i) => (
           <motion.div
             key={m.id}
             className="group rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40"

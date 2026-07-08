@@ -15,14 +15,15 @@ import Galeria from "./pages/Galeria";
 import Viatura from "./pages/Viatura";
 import Tatica from "./pages/Tatica";
 import Curso from "./pages/Curso";
+import Operacoes from "./pages/Operacoes";
 import Usuarios from "./pages/Usuarios";
 import DashboardLayout from "./components/DashboardLayout";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const STAFF_ROLES = ["admin", "operador"] as const;
-const ALL_ROLES = ["admin", "operador", "visitante"] as const;
+const STAFF_ROLES = ["comando", "membro"] as const;
+const ALL_ROLES = ["comando", "membro", "visitante"] as const;
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -78,8 +79,14 @@ const App = () => (
               </ProtectedRoute>
             } />
 
+            <Route path="/dashboard/operacoes" element={
+              <ProtectedRoute allowedRoles={[...STAFF_ROLES]}>
+                <DashboardLayout><Operacoes /></DashboardLayout>
+              </ProtectedRoute>
+            } />
+
             <Route path="/dashboard/usuarios" element={
-              <ProtectedRoute allowedRoles={["admin"]}>
+              <ProtectedRoute allowedRoles={["comando"]}>
                 <DashboardLayout><Usuarios /></DashboardLayout>
               </ProtectedRoute>
             } />

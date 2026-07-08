@@ -1,27 +1,55 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { BookOpen, Plus, Pencil, Trash2, ExternalLink } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { supabase } from "@/lib/supabaseClient";
 
 interface Curso { id: string; nome: string; aplicador: string; descricao: string; videoUrl: string; }
 
-const DEFAULT_CURSOS: Curso[] = [
-  { id: "1", nome: "Abordagem Tática em Terreno Urbano", aplicador: "Sgt. Lucas Ferreira", descricao: "Técnicas de abordagem controlada em ambientes urbanos, cobertura mútua e comunicação entre operadores.", videoUrl: "" },
-  { id: "2", nome: "Primeiros Socorros Táticos (TCCC)", aplicador: "Sd. Maria Oliveira", descricao: "Protocolo de atendimento médico em campo de combate, controle de hemorragia e transporte de vítimas sob pressão.", videoUrl: "" },
-];
-
 const EMPTY_FORM = { nome: "", aplicador: "", descricao: "", videoUrl: "" };
+
+async function fetchCursos(): Promise<Curso[]> {
+  const { data, error } = await supabase.from("cursos").select("id, nome, aplicador, descricao, video_url");
+  if (error) throw error;
+  return data.map((c) => ({ id: c.id, nome: c.nome, aplicador: c.aplicador, descricao: c.descricao, videoUrl: c.video_url }));
+}
 
 const Curso = () => {
   const { user } = useAuth();
-  const isAdmin = user?.papel === "admin";
-  const [cursos, setCursos] = useLocalStorage<Curso[]>("gama-cursos", DEFAULT_CURSOS);
+  const isAdmin = user?.papel === "comando";
+  const queryClient = useQueryClient();
+  const { data: cursos = [], isLoading } = useQuery({ queryKey: ["cursos"], queryFn: fetchCursos });
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["cursos"] });
+
+  const saveCurso = useMutation({
+    mutationFn: async ({ id, ...form }: { id?: string } & typeof EMPTY_FORM) => {
+      const payload = { nome: form.nome, aplicador: form.aplicador, descricao: form.descricao, video_url: form.videoUrl };
+      if (id) {
+        const { error } = await supabase.from("cursos").update(payload).eq("id", id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("cursos").insert(payload);
+        if (error) throw error;
+      }
+    },
+    onSuccess: invalidate,
+  });
+
+  const deleteCurso = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("cursos").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Curso | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -40,15 +68,11 @@ const Curso = () => {
 
   const handleSave = () => {
     if (!form.nome.trim() || !form.aplicador.trim()) return;
-    if (editing) {
-      setCursos((prev) => prev.map((c) => (c.id === editing.id ? { ...c, ...form } : c)));
-    } else {
-      setCursos((prev) => [...prev, { id: Date.now().toString(), ...form }]);
-    }
+    saveCurso.mutate({ id: editing?.id, ...form });
     setDialogOpen(false);
   };
 
-  const handleDelete = (id: string) => setCursos((prev) => prev.filter((c) => c.id !== id));
+  const handleDelete = (id: string) => deleteCurso.mutate(id);
 
   return (
     <div className="space-y-6">
@@ -65,7 +89,9 @@ const Curso = () => {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {cursos.map((curso, i) => (
+        {isLoading
+          ? [1, 2, 3].map((i) => <div key={i} className="h-40 animate-pulse rounded-xl border border-border bg-muted/30" />)
+          : cursos.map((curso, i) => (
           <motion.div
             key={curso.id}
             className="group flex flex-col rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/40"

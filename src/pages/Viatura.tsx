@@ -1,30 +1,41 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Pencil } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { supabase } from "@/lib/supabaseClient";
 import viaturaImg from "@/assets/viatura-ram.jpg";
 
 interface Position { id: string; role: string; desc: string; x: string; y: string; }
 
-const DEFAULT_POSITIONS: Position[] = [
-  { id: "P1", role: "Motorista", desc: "Conduz a viatura, responsável por manobras táticas e posicionamento.", x: "15%", y: "50%" },
-  { id: "P2", role: "Navegador", desc: "Coordena rotas e comunicação com a central.", x: "30%", y: "35%" },
-  { id: "P3", role: "Atirador 1", desc: "Cobertura lateral direita, primeiro a desembarcar.", x: "55%", y: "30%" },
-  { id: "P4", role: "Atirador 2", desc: "Cobertura lateral esquerda, proteção de retaguarda.", x: "55%", y: "70%" },
-  { id: "P5", role: "Médico Tático", desc: "Suporte médico e primeiros socorros em campo.", x: "75%", y: "35%" },
-  { id: "P6", role: "Líder de Equipe", desc: "Comando operacional, última decisão tática.", x: "75%", y: "65%" },
-];
+async function fetchPositions(): Promise<Position[]> {
+  const { data, error } = await supabase
+    .from("viatura_posicoes")
+    .select("id, role, descricao, x, y")
+    .order("id");
+  if (error) throw error;
+  return data.map((p) => ({ id: p.id, role: p.role, desc: p.descricao, x: p.x, y: p.y }));
+}
 
 const Viatura = () => {
   const { user } = useAuth();
-  const isAdmin = user?.papel === "admin";
-  const [positions, setPositions] = useLocalStorage<Position[]>("gama-viatura", DEFAULT_POSITIONS);
+  const isAdmin = user?.papel === "comando";
+  const queryClient = useQueryClient();
+  const { data: positions = [], isLoading } = useQuery({ queryKey: ["viatura_posicoes"], queryFn: fetchPositions });
+
+  const updatePosition = useMutation({
+    mutationFn: async ({ id, role, desc }: { id: string; role: string; desc: string }) => {
+      const { error } = await supabase.from("viatura_posicoes").update({ role, descricao: desc }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["viatura_posicoes"] }),
+  });
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Position | null>(null);
   const [form, setForm] = useState({ role: "", desc: "" });
@@ -37,9 +48,25 @@ const Viatura = () => {
 
   const handleSave = () => {
     if (!form.role.trim() || !form.desc.trim() || !editing) return;
-    setPositions((prev) => prev.map((p) => (p.id === editing.id ? { ...p, ...form } : p)));
+    updatePosition.mutate({ id: editing.id, role: form.role, desc: form.desc });
     setDialogOpen(false);
   };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="font-display text-2xl font-bold tracking-wider">Sistema de Viatura</h1>
+          <p className="text-sm text-muted-foreground">Posições e funções na viatura tática</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="h-24 animate-pulse rounded-xl border border-border bg-muted/30" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

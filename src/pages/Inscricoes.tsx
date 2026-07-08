@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Send, ClipboardList, Trash2 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { supabase } from "@/lib/supabaseClient";
 
 interface Candidatura {
   id: string;
@@ -22,35 +23,70 @@ interface Candidatura {
 
 const EMPTY_FORM = { nome: "", id: "", tempo: "", experiencia: "", motivacao: "", disponibilidade: "" };
 
+async function fetchCandidaturas(): Promise<Candidatura[]> {
+  const { data, error } = await supabase
+    .from("inscricoes")
+    .select("id, nome, id_policial, tempo, disponibilidade, experiencia, motivacao, data")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
 const Inscricoes = () => {
   const { toast } = useToast();
   const { user } = useAuth();
-  const isAdmin = user?.papel === "admin";
-  const [candidaturas, setCandidaturas] = useLocalStorage<Candidatura[]>("gama-candidaturas", []);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const isAdmin = user?.papel === "comando";
+  const queryClient = useQueryClient();
   const [adminView, setAdminView] = useState(false);
+
+  const { data: candidaturas = [] } = useQuery({
+    queryKey: ["inscricoes"],
+    queryFn: fetchCandidaturas,
+    enabled: isAdmin,
+  });
+
+  const addCandidatura = useMutation({
+    mutationFn: async (payload: typeof EMPTY_FORM) => {
+      const { error } = await supabase.from("inscricoes").insert({
+        nome: payload.nome,
+        id_policial: payload.id,
+        tempo: payload.tempo,
+        disponibilidade: payload.disponibilidade,
+        experiencia: payload.experiencia,
+        motivacao: payload.motivacao,
+        data: new Date().toLocaleDateString("pt-BR"),
+      });
+      if (error) throw error;
+    },
+  });
+
+  const deleteCandidatura = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("inscricoes").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["inscricoes"] }),
+  });
+
+  const [form, setForm] = useState(EMPTY_FORM);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const nova: Candidatura = {
-      id: Date.now().toString(),
-      nome: form.nome,
-      id_policial: form.id,
-      tempo: form.tempo,
-      disponibilidade: form.disponibilidade,
-      experiencia: form.experiencia,
-      motivacao: form.motivacao,
-      data: new Date().toLocaleDateString("pt-BR"),
-    };
-    setCandidaturas((prev) => [nova, ...prev]);
-    toast({ title: "Candidatura enviada!", description: "Aguarde o contato da coordenação." });
-    setForm(EMPTY_FORM);
+    addCandidatura.mutate(form, {
+      onSuccess: () => {
+        toast({ title: "Candidatura enviada!", description: "Aguarde o contato da coordenação." });
+        setForm(EMPTY_FORM);
+      },
+      onError: () => {
+        toast({ title: "Erro", description: "Não foi possível enviar a candidatura.", variant: "destructive" });
+      },
+    });
   };
 
   const update = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const handleDelete = (id: string) => setCandidaturas((prev) => prev.filter((c) => c.id !== id));
+  const handleDelete = (id: string) => deleteCandidatura.mutate(id);
 
   if (isAdmin && adminView) {
     return (
