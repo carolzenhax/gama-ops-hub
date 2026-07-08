@@ -12,10 +12,10 @@ import { supabase } from "@/lib/supabaseClient";
 
 interface Membro { id: string; name: string; cargo: string; classe: string; }
 
-const classes = ["Todos", "Oficial", "Graduado", "Praça"];
-const classeOptions = ["Oficial", "Graduado", "Praça"];
+const classes = ["Todos", "Comando", "Sub-comando", "Operador", "Estágio"];
+const classeOptions = ["Comando", "Sub-comando", "Operador", "Estágio"];
 
-const EMPTY_FORM = { name: "", cargo: "", classe: "Praça" };
+const EMPTY_FORM = { name: "", cargo: "", classe: "Operador" };
 
 async function fetchMembers(): Promise<Membro[]> {
   const { data, error } = await supabase.from("membros").select("id, nome, cargo, classe");
