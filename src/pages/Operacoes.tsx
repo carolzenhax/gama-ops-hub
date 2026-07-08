@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { format, parseISO } from "date-fns";
-import { Target, Send } from "lucide-react";
+import { Target, Send, Download } from "lucide-react";
+import * as XLSX from "xlsx";
 import {
-  ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line,
+  ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,11 @@ const RESULTADO_COLORS: Record<string, string> = {
   "Derrota": "hsl(var(--accent))",
   "Empate": "hsl(var(--tactical-blue))",
 };
+
+const PALETTE = [
+  "hsl(var(--primary))", "hsl(var(--accent))", "hsl(var(--tactical-blue))",
+  "#eab308", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#84cc16", "#06b6d4", "#f43f5e", "#a3a3a3",
+];
 
 const EMPTY_FORM = {
   data: new Date().toISOString().slice(0, 10),
@@ -86,6 +92,66 @@ async function fetchOperacoes(): Promise<Operacao[]> {
     gangues: row.operacoes_gangues.map((g) => g.gangue),
     participantes: row.operacoes_participantes.map((p) => p.membro),
   }));
+}
+
+function DonutChart({ title, data, colors }: { title: string; data: { name: string; value: number }[]; colors?: string[] }) {
+  const total = data.reduce((sum, d) => sum + d.value, 0);
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <h3 className="mb-4 font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">{title}</h3>
+      {total === 0 ? (
+        <p className="py-16 text-center text-xs text-muted-foreground">Sem dados.</p>
+      ) : (
+        <>
+          <div className="relative">
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2} stroke="none">
+                  {data.map((d, i) => <Cell key={d.name} fill={colors ? colors[i] : PALETTE[i % PALETTE.length]} />)}
+                </Pie>
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span className="font-display text-2xl font-bold">{total}</span>
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Total</span>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap justify-center gap-x-3 gap-y-1">
+            {data.map((d, i) => (
+              <span key={d.name} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: colors ? colors[i] : PALETTE[i % PALETTE.length] }} />
+                {d.name} ({d.value})
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function CategoryBarChart({ title, data, dataKeyName = "nome" }: { title: string; data: { nome: string; total: number }[]; dataKeyName?: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <h3 className="mb-4 font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">{title}</h3>
+      {data.length === 0 ? (
+        <p className="py-16 text-center text-xs text-muted-foreground">Sem dados.</p>
+      ) : (
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={data} margin={{ bottom: 40 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey={dataKeyName} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} angle={-35} textAnchor="end" interval={0} height={50} />
+            <YAxis allowDecimals={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
+            <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
+            <Bar dataKey="total" radius={[4, 4, 0, 0]}>
+              {data.map((d, i) => <Cell key={d.nome} fill={PALETTE[i % PALETTE.length]} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
 }
 
 const Operacoes = () => {
@@ -148,6 +214,7 @@ const Operacoes = () => {
   });
 
   const [form, setForm] = useState(EMPTY_FORM);
+  const [mesFiltro, setMesFiltro] = useState("");
 
   const acaoSelecionada = acoesTipos.find((a) => a.id === form.acaoId);
   const precisaLoja = acaoSelecionada?.nome === "Loja de Departamento";
@@ -158,30 +225,72 @@ const Operacoes = () => {
     createOperacao.mutate(form, { onSuccess: () => setForm(EMPTY_FORM) });
   };
 
-  const resultadoChartData = useMemo(
-    () => RESULTADOS.map((r) => ({ name: r, value: operacoes.filter((o) => o.resultado === r).length })).filter((d) => d.value > 0),
-    [operacoes]
+  const operacoesFiltradas = useMemo(
+    () => (mesFiltro ? operacoes.filter((o) => o.data.startsWith(mesFiltro)) : operacoes),
+    [operacoes, mesFiltro]
   );
+
+  const acoesChartData = useMemo(() => {
+    const counts = new Map<string, number>();
+    operacoesFiltradas.forEach((o) => {
+      const nome = o.acao?.nome ?? "—";
+      counts.set(nome, (counts.get(nome) ?? 0) + 1);
+    });
+    return Array.from(counts.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  }, [operacoesFiltradas]);
+
+  const resultadoChartData = useMemo(
+    () => RESULTADOS.map((r) => ({ name: r, value: operacoesFiltradas.filter((o) => o.resultado === r).length })).filter((d) => d.value > 0),
+    [operacoesFiltradas]
+  );
+
+  const participacoesChartData = useMemo(() => {
+    const counts = new Map<string, number>();
+    operacoesFiltradas.forEach((o) => o.participantes.forEach((p) => counts.set(p.nome, (counts.get(p.nome) ?? 0) + 1)));
+    return Array.from(counts.entries()).map(([nome, total]) => ({ nome, total })).sort((a, b) => b.total - a.total);
+  }, [operacoesFiltradas]);
+
+  const comandosChartData = useMemo(() => {
+    const counts = new Map<string, number>();
+    operacoesFiltradas.forEach((o) => {
+      if (o.comando) counts.set(o.comando.nome, (counts.get(o.comando.nome) ?? 0) + 1);
+    });
+    return Array.from(counts.entries()).map(([nome, total]) => ({ nome, total })).sort((a, b) => b.total - a.total);
+  }, [operacoesFiltradas]);
 
   const gangueChartData = useMemo(() => {
     const counts = new Map<string, number>();
-    operacoes.forEach((o) => o.gangues.forEach((g) => counts.set(g.nome, (counts.get(g.nome) ?? 0) + 1)));
-    return Array.from(counts.entries())
-      .map(([nome, total]) => ({ nome, total }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 10);
-  }, [operacoes]);
+    operacoesFiltradas.forEach((o) => o.gangues.forEach((g) => counts.set(g.nome, (counts.get(g.nome) ?? 0) + 1)));
+    return Array.from(counts.entries()).map(([nome, total]) => ({ nome, total })).sort((a, b) => b.total - a.total).slice(0, 15);
+  }, [operacoesFiltradas]);
 
-  const timelineChartData = useMemo(() => {
+  const lojaDeptChartData = useMemo(() => {
     const counts = new Map<string, number>();
-    operacoes.forEach((o) => {
-      const key = format(parseISO(o.data), "MM/yyyy");
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    });
-    return Array.from(counts.entries())
-      .map(([mes, total]) => ({ mes, total }))
-      .sort((a, b) => a.mes.localeCompare(b.mes));
-  }, [operacoes]);
+    operacoesFiltradas
+      .filter((o) => o.acao?.nome === "Loja de Departamento")
+      .forEach((o) => {
+        const nome = o.loja?.nome ?? "—";
+        counts.set(nome, (counts.get(nome) ?? 0) + 1);
+      });
+    return Array.from(counts.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  }, [operacoesFiltradas]);
+
+  const handleExport = () => {
+    const rows = operacoesFiltradas.map((op) => ({
+      Data: format(parseISO(op.data), "dd/MM/yyyy"),
+      "Ação": op.acao?.nome ?? "",
+      Loja: op.loja?.nome ?? "",
+      Resultado: op.resultado,
+      Comando: op.comando?.nome ?? "",
+      Participantes: op.participantes.map((p) => p.nome).join(", "),
+      Gangues: op.gangues.map((g) => g.nome).join(", "),
+      Detalhes: op.detalhes,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Operações");
+    XLSX.writeFile(wb, mesFiltro ? `operacoes-${mesFiltro}.xlsx` : "operacoes-todas.xlsx");
+  };
 
   return (
     <div className="space-y-6">
@@ -299,74 +408,98 @@ const Operacoes = () => {
             </div>
           ) : (
             <>
-              <div className="grid gap-4 lg:grid-cols-3">
-                <div className="rounded-xl border border-border bg-card p-5">
-                  <h3 className="mb-4 font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">Resultado Geral</h3>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <PieChart>
-                      <Pie data={resultadoChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                        {resultadoChartData.map((d) => (
-                          <Cell key={d.name} fill={RESULTADO_COLORS[d.name]} />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Filtrar por mês</Label>
+                  <Input
+                    type="month"
+                    value={mesFiltro}
+                    onChange={(e) => setMesFiltro(e.target.value)}
+                    className="w-auto bg-muted/50 text-sm"
+                  />
+                  {mesFiltro && (
+                    <button
+                      onClick={() => setMesFiltro("")}
+                      className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+                    >
+                      Limpar
+                    </button>
+                  )}
                 </div>
-
-                <div className="rounded-xl border border-border bg-card p-5">
-                  <h3 className="mb-4 font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">Gangues Mais Enfrentadas</h3>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={gangueChartData} layout="vertical" margin={{ left: 16 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                      <XAxis type="number" allowDecimals={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
-                      <YAxis type="category" dataKey="nome" width={80} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
-                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
-                      <Bar dataKey="total" fill="hsl(var(--accent))" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="rounded-xl border border-border bg-card p-5">
-                  <h3 className="mb-4 font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">Ações por Mês</h3>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <LineChart data={timelineChartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="mes" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
-                      <YAxis allowDecimals={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
-                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
-                      <Line type="monotone" dataKey="total" stroke="hsl(var(--primary))" strokeWidth={2} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleExport}
+                  disabled={operacoesFiltradas.length === 0}
+                  className="gap-1.5 text-xs"
+                >
+                  <Download className="h-3.5 w-3.5" /> Exportar XLSX
+                </Button>
               </div>
 
-              <div className="space-y-3">
-                <h2 className="font-display text-sm font-bold uppercase tracking-wider">Histórico de Ações</h2>
-                {operacoes.map((op) => (
-                  <div key={op.id} className="rounded-xl border border-border bg-card p-4">
-                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-display text-xs text-accent">{format(parseISO(op.data), "dd/MM/yyyy")}</span>
-                        <span className="font-display text-sm font-bold">{op.acao?.nome}{op.loja ? ` — ${op.loja.nome}` : ""}</span>
-                      </div>
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider"
-                        style={{ backgroundColor: `${RESULTADO_COLORS[op.resultado]}33`, color: RESULTADO_COLORS[op.resultado] }}
-                      >
-                        {op.resultado}
-                      </span>
+              {operacoesFiltradas.length === 0 ? (
+                <div className="rounded-xl border border-border bg-card p-12 text-center">
+                  <Target className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
+                  <p className="text-sm text-muted-foreground">Nenhuma ação registrada nesse mês.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <DonutChart title="N° Ações" data={acoesChartData} />
+                    <DonutChart
+                      title="Resultado"
+                      data={resultadoChartData}
+                      colors={resultadoChartData.map((d) => RESULTADO_COLORS[d.name])}
+                    />
+                    <CategoryBarChart title="N° Participações" data={participacoesChartData} />
+                    <CategoryBarChart title="Comandos" data={comandosChartData} />
+
+                    <div className="rounded-xl border border-border bg-card p-5">
+                      <h3 className="mb-4 font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">Gangues</h3>
+                      <ResponsiveContainer width="100%" height={Math.max(220, gangueChartData.length * 26)}>
+                        <BarChart data={gangueChartData} layout="vertical" margin={{ left: 16 }}>
+                          <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                          <XAxis type="number" allowDecimals={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
+                          <YAxis type="category" dataKey="nome" width={90} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
+                          <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
+                          <Bar dataKey="total" radius={[0, 4, 4, 0]}>
+                            {gangueChartData.map((d, i) => <Cell key={d.nome} fill={PALETTE[i % PALETTE.length]} />)}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Comando: {op.comando?.nome ?? "—"} · Participantes: {op.participantes.map((p) => p.nome).join(", ") || "—"}
-                    </p>
-                    {op.gangues.length > 0 && (
-                      <p className="mt-1 text-xs text-muted-foreground">Gangues: {op.gangues.map((g) => g.nome).join(", ")}</p>
-                    )}
-                    {op.detalhes && <p className="mt-2 text-sm text-foreground/90">{op.detalhes}</p>}
+
+                    <DonutChart title="Loja de Departamento" data={lojaDeptChartData} />
                   </div>
-                ))}
-              </div>
+
+                  <div className="space-y-3">
+                    <h2 className="font-display text-sm font-bold uppercase tracking-wider">Histórico de Ações</h2>
+                    {operacoesFiltradas.map((op) => (
+                      <div key={op.id} className="rounded-xl border border-border bg-card p-4">
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-display text-xs text-accent">{format(parseISO(op.data), "dd/MM/yyyy")}</span>
+                            <span className="font-display text-sm font-bold">{op.acao?.nome}{op.loja ? ` — ${op.loja.nome}` : ""}</span>
+                          </div>
+                          <span
+                            className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider"
+                            style={{ backgroundColor: `${RESULTADO_COLORS[op.resultado]}33`, color: RESULTADO_COLORS[op.resultado] }}
+                          >
+                            {op.resultado}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Comando: {op.comando?.nome ?? "—"} · Participantes: {op.participantes.map((p) => p.nome).join(", ") || "—"}
+                        </p>
+                        {op.gangues.length > 0 && (
+                          <p className="mt-1 text-xs text-muted-foreground">Gangues: {op.gangues.map((g) => g.nome).join(", ")}</p>
+                        )}
+                        {op.detalhes && <p className="mt-2 text-sm text-foreground/90">{op.detalhes}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </>
           )}
         </>

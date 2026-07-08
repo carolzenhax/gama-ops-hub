@@ -25,6 +25,7 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "/dashboard/manual",
     "/dashboard/galeria",
     "/dashboard/curso",
+    "/dashboard/inscricoes",
   ],
 };
 
