@@ -25,6 +25,13 @@ const classeOptions = CLASSE_ORDER;
 
 const EMPTY_FORM = { name: "", cargo: "", classe: "Operador", fotoUrl: "", passaporte: "", patente: "", dataIngresso: "" };
 
+// Extrai o número da "classe" dentro do cargo (ex: "Operador de 2ª Classe" → 2)
+// pra ordenar 1ª, depois 2ª, depois 3ª. Cargos sem número (Comandante, Aspirante...) ficam por último.
+function cargoRank(cargo: string): number {
+  const match = cargo.match(/\d+/);
+  return match ? parseInt(match[0], 10) : Infinity;
+}
+
 async function fetchMembers(): Promise<Membro[]> {
   const { data, error } = await supabase.from("membros").select("id, nome, cargo, classe, foto_url, passaporte, patente, data_ingresso");
   if (error) throw error;
@@ -84,10 +91,10 @@ const Membros = () => {
   const [detailsTarget, setDetailsTarget] = useState<Membro | null>(null);
   const [newChecklistItem, setNewChecklistItem] = useState("");
 
-  const byName = (a: Membro, b: Membro) => a.name.localeCompare(b.name);
-  const filtered = (filter === "Todos" ? members : members.filter((m) => m.classe === filter)).slice().sort(byName);
+  const sortMembers = (a: Membro, b: Membro) => cargoRank(a.cargo) - cargoRank(b.cargo) || a.name.localeCompare(b.name);
+  const filtered = (filter === "Todos" ? members : members.filter((m) => m.classe === filter)).slice().sort(sortMembers);
   const grouped = CLASSE_ORDER
-    .map((classe) => ({ classe, items: members.filter((m) => m.classe === classe).slice().sort(byName) }))
+    .map((classe) => ({ classe, items: members.filter((m) => m.classe === classe).slice().sort(sortMembers) }))
     .filter((g) => g.items.length > 0);
 
   const openAdd = () => {
