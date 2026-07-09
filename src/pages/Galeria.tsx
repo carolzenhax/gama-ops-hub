@@ -9,31 +9,46 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
+import { CreatableSelect } from "@/components/CreatableSelect";
 
-const categories = ["Todas", "Operações", "Treinamentos", "Viaturas", "Equipe"];
-const categoryOptions = ["Operações", "Treinamentos", "Viaturas", "Equipe"];
+interface Album { id: string; nome: string; }
+interface Photo { id: string; src: string; title: string; album: Album | null; }
 
-interface Photo { id: string; src: string; category: string; title: string; }
+const EMPTY_FORM = { src: "", title: "", albumId: null as string | null };
 
-const EMPTY_FORM = { src: "", title: "", category: "Operações" };
+async function fetchAlbuns(): Promise<Album[]> {
+  const { data, error } = await supabase.from("galeria_albuns").select("id, nome").order("nome");
+  if (error) throw error;
+  return data;
+}
 
 async function fetchPhotos(): Promise<Photo[]> {
-  const { data, error } = await supabase.from("galeria_fotos").select("id, src, categoria, titulo");
+  const { data, error } = await supabase.from("galeria_fotos").select("id, src, titulo, album:galeria_albuns(id, nome)");
   if (error) throw error;
-  return data.map((p) => ({ id: p.id, src: p.src, category: p.categoria, title: p.titulo }));
+  return (data as unknown as Array<{ id: string; src: string; titulo: string; album: Album | null }>).map((p) => ({
+    id: p.id, src: p.src, title: p.titulo, album: p.album,
+  }));
 }
 
 const Galeria = () => {
   const { user } = useAuth();
   const isAdmin = user?.papel === "comando";
   const queryClient = useQueryClient();
+  const { data: albuns = [] } = useQuery({ queryKey: ["galeria_albuns"], queryFn: fetchAlbuns });
   const { data: photos = [], isLoading } = useQuery({ queryKey: ["galeria_fotos"], queryFn: fetchPhotos });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["galeria_fotos"] });
 
+  const createAlbum = async (nome: string): Promise<Album> => {
+    const { data, error } = await supabase.from("galeria_albuns").insert({ nome }).select("id, nome").single();
+    if (error) throw error;
+    queryClient.setQueryData<Album[]>(["galeria_albuns"], (prev = []) => [...prev, data].sort((a, b) => a.nome.localeCompare(b.nome)));
+    return data;
+  };
+
   const addPhoto = useMutation({
     mutationFn: async (form: typeof EMPTY_FORM) => {
-      const { error } = await supabase.from("galeria_fotos").insert({ src: form.src, categoria: form.category, titulo: form.title });
+      const { error } = await supabase.from("galeria_fotos").insert({ src: form.src, titulo: form.title, album_id: form.albumId });
       if (error) throw error;
     },
     onSuccess: invalidate,
@@ -52,7 +67,7 @@ const Galeria = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
 
-  const filtered = filter === "Todas" ? photos : photos.filter((p) => p.category === filter);
+  const filtered = filter === "Todas" ? photos : photos.filter((p) => p.album?.nome === filter);
 
   const handleAdd = () => {
     if (!form.src.trim() || !form.title.trim()) return;
@@ -81,7 +96,7 @@ const Galeria = () => {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {categories.map((c) => (
+        {["Todas", ...albuns.map((a) => a.nome)].map((c) => (
           <button
             key={c}
             onClick={() => setFilter(c)}
@@ -117,7 +132,7 @@ const Galeria = () => {
               <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
               <div className="absolute bottom-3 left-3 opacity-0 transition-opacity group-hover:opacity-100">
                 <p className="font-display text-xs tracking-wider text-foreground">{photo.title}</p>
-                <p className="text-[10px] uppercase text-muted-foreground">{photo.category}</p>
+                {photo.album && <p className="text-[10px] uppercase text-muted-foreground">{photo.album.nome}</p>}
               </div>
             </div>
             {isAdmin && (
@@ -173,14 +188,14 @@ const Galeria = () => {
               <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Título da foto" className="bg-muted/50" />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Categoria</Label>
-              <select
-                value={form.category}
-                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground"
-              >
-                {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Álbum</Label>
+              <CreatableSelect
+                options={albuns}
+                value={form.albumId}
+                onChange={(id) => setForm((f) => ({ ...f, albumId: id }))}
+                onCreate={createAlbum}
+                placeholder="Selecione ou crie um álbum"
+              />
             </div>
           </div>
           <DialogFooter>
