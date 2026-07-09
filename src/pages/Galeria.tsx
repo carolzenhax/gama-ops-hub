@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Plus, Trash2, ArrowLeft, Image as ImageIcon } from "lucide-react";
+import { X, Plus, Trash2, Pencil, ArrowLeft, Image as ImageIcon } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,11 +73,33 @@ const Galeria = () => {
     },
   });
 
+  const renameAlbum = useMutation({
+    mutationFn: async ({ id, nome }: { id: string; nome: string }) => {
+      const { error } = await supabase.from("galeria_albuns").update({ nome }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["galeria_albuns"] });
+      queryClient.invalidateQueries({ queryKey: ["galeria_fotos"] });
+    },
+  });
+
+  const renamePhoto = useMutation({
+    mutationFn: async ({ id, titulo }: { id: string; titulo: string }) => {
+      const { error } = await supabase.from("galeria_fotos").update({ titulo }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
   const [selectedAlbum, setSelectedAlbum] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [deleteAlbumTarget, setDeleteAlbumTarget] = useState<{ id: string; nome: string } | null>(null);
+  const [editAlbumTarget, setEditAlbumTarget] = useState<{ id: string; nome: string } | null>(null);
+  const [editPhotoTarget, setEditPhotoTarget] = useState<{ id: string; title: string } | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   const photosSemAlbum = photos.filter((p) => !p.album);
   const albumCards = [
@@ -171,12 +193,20 @@ const Galeria = () => {
                     <p className="text-[10px] uppercase text-muted-foreground">{album.fotos.length} foto(s)</p>
                   </div>
                   {isAdmin && album.id !== SEM_ALBUM && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setDeleteAlbumTarget({ id: album.id, nome: album.nome }); }}
-                      className="absolute right-2 top-2 rounded-full bg-background/80 p-1.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="absolute right-2 top-2 flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditAlbumTarget({ id: album.id, nome: album.nome }); setEditValue(album.nome); }}
+                        className="rounded-full bg-background/80 p-1.5 text-muted-foreground hover:text-foreground"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setDeleteAlbumTarget({ id: album.id, nome: album.nome }); }}
+                        className="rounded-full bg-background/80 p-1.5 text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   )}
                 </div>
               </motion.div>
@@ -212,12 +242,20 @@ const Galeria = () => {
                 </div>
               </div>
               {isAdmin && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleDelete(photo.id); }}
-                  className="absolute right-2 top-2 rounded-full bg-background/80 p-1.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <div className="absolute right-2 top-2 flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setEditPhotoTarget({ id: photo.id, title: photo.title }); setEditValue(photo.title); }}
+                    className="rounded-full bg-background/80 p-1.5 text-muted-foreground hover:text-foreground"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDelete(photo.id); }}
+                    className="rounded-full bg-background/80 p-1.5 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               )}
             </motion.div>
           ))}
@@ -300,6 +338,49 @@ const Galeria = () => {
               onClick={() => deleteAlbum.mutate(deleteAlbumTarget!.id, { onSuccess: () => setDeleteAlbumTarget(null) })}
             >
               {deleteAlbum.isPending ? "Excluindo..." : "Excluir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Edit album name */}
+      <Dialog open={!!editAlbumTarget} onOpenChange={(open) => !open && setEditAlbumTarget(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display tracking-wider">Renomear Álbum</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Nome</Label>
+            <Input value={editValue} onChange={(e) => setEditValue(e.target.value)} className="bg-muted/50" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditAlbumTarget(null)}>Cancelar</Button>
+            <Button
+              disabled={renameAlbum.isPending || !editValue.trim()}
+              onClick={() => renameAlbum.mutate({ id: editAlbumTarget!.id, nome: editValue.trim() }, { onSuccess: () => setEditAlbumTarget(null) })}
+            >
+              {renameAlbum.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit photo title */}
+      <Dialog open={!!editPhotoTarget} onOpenChange={(open) => !open && setEditPhotoTarget(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display tracking-wider">Renomear Foto</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Título</Label>
+            <Input value={editValue} onChange={(e) => setEditValue(e.target.value)} className="bg-muted/50" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditPhotoTarget(null)}>Cancelar</Button>
+            <Button
+              disabled={renamePhoto.isPending || !editValue.trim()}
+              onClick={() => renamePhoto.mutate({ id: editPhotoTarget!.id, titulo: editValue.trim() }, { onSuccess: () => setEditPhotoTarget(null) })}
+            >
+              {renamePhoto.isPending ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>
         </DialogContent>
