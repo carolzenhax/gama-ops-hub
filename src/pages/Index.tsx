@@ -95,30 +95,6 @@ const Index = () => {
           <ChevronDown className="h-6 w-6 text-muted-foreground" />
         </motion.div>
       </section>
-
-      {/* Stats Section */}
-      <section className="relative border-t border-border bg-card py-20">
-        <div className="container mx-auto grid grid-cols-2 gap-8 px-4 md:grid-cols-4">
-          {[
-            { value: "150+", label: "Operações" },
-            { value: "32", label: "Operadores" },
-            { value: "8", label: "Viaturas" },
-            { value: "100%", label: "Taxa de Êxito" },
-          ].map((stat, i) => (
-            <motion.div
-              key={stat.label}
-              className="text-center"
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.15, duration: 0.5 }}
-            >
-              <p className="font-display text-3xl font-bold text-accent md:text-4xl">{stat.value}</p>
-              <p className="mt-1 text-sm uppercase tracking-wider text-muted-foreground">{stat.label}</p>
-            </motion.div>
-          ))}
-        </div>
-      </section>
     </div>
   );
 };
