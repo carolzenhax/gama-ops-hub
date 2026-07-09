@@ -38,6 +38,7 @@ interface Operacao {
   acao: Option | null;
   loja: Option | null;
   comandos: Option[];
+  comandosExternos: Option[];
   gangues: Option[];
   participantes: Option[];
   criadoPor: string | null;
@@ -62,12 +63,13 @@ const EMPTY_FORM = {
   lojaId: null as string | null,
   resultado: "Vitória",
   comandoIds: [] as string[],
+  comandoExternoIds: [] as string[],
   participanteIds: [] as string[],
   gangueIds: [] as string[],
   detalhes: "",
 };
 
-async function fetchLookup(table: "acoes_tipos" | "lojas" | "gangues"): Promise<Option[]> {
+async function fetchLookup(table: "acoes_tipos" | "lojas" | "gangues" | "comandos_externos"): Promise<Option[]> {
   const { data, error } = await supabase.from(table).select("id, nome").order("nome");
   if (error) throw error;
   return data;
@@ -90,6 +92,7 @@ async function fetchOperacoes(): Promise<Operacao[]> {
       operacoes_gangues(gangue:gangues(id, nome)),
       operacoes_participantes(membro:membros!operacoes_participantes_membro_id_fkey(id, nome)),
       operacoes_comandos(membro:membros!operacoes_comandos_membro_id_fkey(id, nome)),
+      operacoes_comandos_externos(comandoExterno:comandos_externos(id, nome)),
       operacoes_observacoes(id, texto, created_at, autor:profiles!operacoes_observacoes_autor_id_fkey(nome))
     `)
     .order("created_at", { ascending: false });
@@ -102,6 +105,7 @@ async function fetchOperacoes(): Promise<Operacao[]> {
     operacoes_gangues: { gangue: Option }[];
     operacoes_participantes: { membro: Option }[];
     operacoes_comandos: { membro: Option }[];
+    operacoes_comandos_externos: { comandoExterno: Option }[];
     operacoes_observacoes: { id: string; texto: string; created_at: string; autor: { nome: string } | null }[];
   }>).map((row) => ({
     id: row.id, data: row.data, resultado: row.resultado, detalhes: row.detalhes, created_at: row.created_at,
@@ -109,6 +113,7 @@ async function fetchOperacoes(): Promise<Operacao[]> {
     gangues: row.operacoes_gangues.map((g) => g.gangue),
     participantes: row.operacoes_participantes.map((p) => p.membro),
     comandos: row.operacoes_comandos.map((c) => c.membro),
+    comandosExternos: row.operacoes_comandos_externos.map((c) => c.comandoExterno),
     criadoPor: row.criado_por_perfil?.nome ?? null,
     observacoes: row.operacoes_observacoes
       .map((o) => ({ id: o.id, texto: o.texto, createdAt: o.created_at, autor: o.autor?.nome ?? null }))
@@ -226,6 +231,7 @@ const Operacoes = () => {
   const { data: acoesTipos = [] } = useQuery({ queryKey: ["acoes_tipos"], queryFn: () => fetchLookup("acoes_tipos") });
   const { data: lojas = [] } = useQuery({ queryKey: ["lojas"], queryFn: () => fetchLookup("lojas") });
   const { data: gangues = [] } = useQuery({ queryKey: ["gangues"], queryFn: () => fetchLookup("gangues") });
+  const { data: comandosExternos = [] } = useQuery({ queryKey: ["comandos_externos"], queryFn: () => fetchLookup("comandos_externos") });
   const { data: membrosOptions = [] } = useQuery({ queryKey: ["membros_options"], queryFn: fetchMembroOptions });
   const { data: operacoes = [], isLoading: loadingOperacoes } = useQuery({
     queryKey: ["operacoes"],
@@ -233,7 +239,7 @@ const Operacoes = () => {
     enabled: user?.papel === "comando" || user?.papel === "membro",
   });
 
-  const createLookup = (table: "acoes_tipos" | "lojas" | "gangues") => async (nome: string): Promise<Option> => {
+  const createLookup = (table: "acoes_tipos" | "lojas" | "gangues" | "comandos_externos") => async (nome: string): Promise<Option> => {
     const { data, error } = await supabase.from(table).insert({ nome }).select("id, nome").single();
     if (error) throw error;
     queryClient.setQueryData<Option[]>([table], (prev = []) => [...prev, data].sort((a, b) => a.nome.localeCompare(b.nome)));
@@ -269,6 +275,12 @@ const Operacoes = () => {
           .from("operacoes_comandos")
           .insert(form.comandoIds.map((membro_id) => ({ operacao_id: operacaoId, membro_id })));
         if (cError) throw cError;
+      }
+      if (form.comandoExternoIds.length) {
+        const { error: ceError } = await supabase
+          .from("operacoes_comandos_externos")
+          .insert(form.comandoExternoIds.map((comando_externo_id) => ({ operacao_id: operacaoId, comando_externo_id })));
+        if (ceError) throw ceError;
       }
       if (form.participanteIds.length) {
         const { error: pError } = await supabase
@@ -310,6 +322,15 @@ const Operacoes = () => {
           .from("operacoes_comandos")
           .insert(form.comandoIds.map((membro_id) => ({ operacao_id: id, membro_id })));
         if (cError) throw cError;
+      }
+
+      const { error: delCEError } = await supabase.from("operacoes_comandos_externos").delete().eq("operacao_id", id);
+      if (delCEError) throw delCEError;
+      if (form.comandoExternoIds.length) {
+        const { error: ceError } = await supabase
+          .from("operacoes_comandos_externos")
+          .insert(form.comandoExternoIds.map((comando_externo_id) => ({ operacao_id: id, comando_externo_id })));
+        if (ceError) throw ceError;
       }
 
       const { error: delPError } = await supabase.from("operacoes_participantes").delete().eq("operacao_id", id);
@@ -393,6 +414,7 @@ const Operacoes = () => {
       lojaId: op.loja?.id ?? null,
       resultado: op.resultado,
       comandoIds: op.comandos.map((c) => c.id),
+      comandoExternoIds: op.comandosExternos.map((c) => c.id),
       participanteIds: op.participantes.map((p) => p.id),
       gangueIds: op.gangues.map((g) => g.id),
       detalhes: op.detalhes,
@@ -468,6 +490,7 @@ const Operacoes = () => {
       Loja: op.loja?.nome ?? "",
       Resultado: op.resultado,
       Comando: op.comandos.map((c) => c.nome).join(", "),
+      "Comando Externo": op.comandosExternos.map((c) => c.nome).join(", "),
       Participantes: op.participantes.map((p) => p.nome).join(", "),
       Gangues: op.gangues.map((g) => g.nome).join(", "),
       Detalhes: op.detalhes,
@@ -586,6 +609,17 @@ const Operacoes = () => {
           </div>
         </div>
 
+        <div className="space-y-2">
+          <Label className="text-xs uppercase tracking-wider text-muted-foreground">Comando Externo (não é da GAMA)</Label>
+          <MultiSelect
+            options={comandosExternos}
+            value={form.comandoExternoIds}
+            onChange={(ids) => setForm((f) => ({ ...f, comandoExternoIds: ids }))}
+            onCreate={createLookup("comandos_externos")}
+            placeholder="Selecione ou crie um nome"
+          />
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label className="text-xs uppercase tracking-wider text-muted-foreground">Participantes</Label>
@@ -651,7 +685,7 @@ const Operacoes = () => {
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Comando: {op.comandos.map((c) => c.nome).join(", ") || "—"} · Participantes: {op.participantes.map((p) => p.nome).join(", ") || "—"}
+                  Comando: {[...op.comandos, ...op.comandosExternos].map((c) => c.nome).join(", ") || "—"} · Participantes: {op.participantes.map((p) => p.nome).join(", ") || "—"}
                 </p>
                 {op.gangues.length > 0 && (
                   <p className="mt-1 text-xs text-muted-foreground">Gangues: {op.gangues.map((g) => g.nome).join(", ")}</p>
@@ -820,7 +854,7 @@ const Operacoes = () => {
                           </div>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          Comando: {op.comandos.map((c) => c.nome).join(", ") || "—"} · Participantes: {op.participantes.map((p) => p.nome).join(", ") || "—"}
+                          Comando: {[...op.comandos, ...op.comandosExternos].map((c) => c.nome).join(", ") || "—"} · Participantes: {op.participantes.map((p) => p.nome).join(", ") || "—"}
                         </p>
                         {op.gangues.length > 0 && (
                           <p className="mt-1 text-xs text-muted-foreground">Gangues: {op.gangues.map((g) => g.nome).join(", ")}</p>
@@ -898,6 +932,17 @@ const Operacoes = () => {
                   placeholder="Selecione quem comandou"
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Comando Externo (não é da GAMA)</Label>
+              <MultiSelect
+                options={comandosExternos}
+                value={editForm.comandoExternoIds}
+                onChange={(ids) => setEditForm((f) => ({ ...f, comandoExternoIds: ids }))}
+                onCreate={createLookup("comandos_externos")}
+                placeholder="Selecione ou crie um nome"
+              />
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
