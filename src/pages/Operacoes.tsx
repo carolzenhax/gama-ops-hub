@@ -30,9 +30,10 @@ interface Operacao {
   created_at: string;
   acao: Option | null;
   loja: Option | null;
-  comando: Option | null;
+  comandos: Option[];
   gangues: Option[];
   participantes: Option[];
+  criadoPor: string | null;
 }
 
 const RESULTADOS = ["Vitória", "Derrota", "Empate"];
@@ -52,7 +53,7 @@ const EMPTY_FORM = {
   acaoId: null as string | null,
   lojaId: null as string | null,
   resultado: "Vitória",
-  comandoId: null as string | null,
+  comandoIds: [] as string[],
   participanteIds: [] as string[],
   gangueIds: [] as string[],
   detalhes: "",
@@ -77,23 +78,28 @@ async function fetchOperacoes(): Promise<Operacao[]> {
       id, data, resultado, detalhes, created_at,
       acao:acoes_tipos(id, nome),
       loja:lojas(id, nome),
-      comando:membros!operacoes_comando_id_fkey(id, nome),
+      criado_por_perfil:profiles!operacoes_criado_por_fkey(nome),
       operacoes_gangues(gangue:gangues(id, nome)),
-      operacoes_participantes(membro:membros!operacoes_participantes_membro_id_fkey(id, nome))
+      operacoes_participantes(membro:membros!operacoes_participantes_membro_id_fkey(id, nome)),
+      operacoes_comandos(membro:membros!operacoes_comandos_membro_id_fkey(id, nome))
     `)
     .order("created_at", { ascending: false });
   if (error) throw error;
 
   return (data as unknown as Array<{
     id: string; data: string; resultado: string; detalhes: string; created_at: string;
-    acao: Option | null; loja: Option | null; comando: Option | null;
+    acao: Option | null; loja: Option | null;
+    criado_por_perfil: { nome: string } | null;
     operacoes_gangues: { gangue: Option }[];
     operacoes_participantes: { membro: Option }[];
+    operacoes_comandos: { membro: Option }[];
   }>).map((row) => ({
     id: row.id, data: row.data, resultado: row.resultado, detalhes: row.detalhes, created_at: row.created_at,
-    acao: row.acao, loja: row.loja, comando: row.comando,
+    acao: row.acao, loja: row.loja,
     gangues: row.operacoes_gangues.map((g) => g.gangue),
     participantes: row.operacoes_participantes.map((p) => p.membro),
+    comandos: row.operacoes_comandos.map((c) => c.membro),
+    criadoPor: row.criado_por_perfil?.nome ?? null,
   }));
 }
 
@@ -189,11 +195,16 @@ const Operacoes = () => {
         acao_id: form.acaoId,
         loja_id: form.lojaId,
         resultado: form.resultado,
-        comando_id: form.comandoId,
         detalhes: form.detalhes,
       });
       if (error) throw error;
 
+      if (form.comandoIds.length) {
+        const { error: cError } = await supabase
+          .from("operacoes_comandos")
+          .insert(form.comandoIds.map((membro_id) => ({ operacao_id: operacaoId, membro_id })));
+        if (cError) throw cError;
+      }
       if (form.participanteIds.length) {
         const { error: pError } = await supabase
           .from("operacoes_participantes")
@@ -223,10 +234,18 @@ const Operacoes = () => {
         acao_id: form.acaoId,
         loja_id: form.lojaId,
         resultado: form.resultado,
-        comando_id: form.comandoId,
         detalhes: form.detalhes,
       }).eq("id", id);
       if (error) throw error;
+
+      const { error: delCError } = await supabase.from("operacoes_comandos").delete().eq("operacao_id", id);
+      if (delCError) throw delCError;
+      if (form.comandoIds.length) {
+        const { error: cError } = await supabase
+          .from("operacoes_comandos")
+          .insert(form.comandoIds.map((membro_id) => ({ operacao_id: id, membro_id })));
+        if (cError) throw cError;
+      }
 
       const { error: delPError } = await supabase.from("operacoes_participantes").delete().eq("operacao_id", id);
       if (delPError) throw delPError;
@@ -275,6 +294,9 @@ const Operacoes = () => {
   const [editForm, setEditForm] = useState(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<Operacao | null>(null);
   const [mesFiltro, setMesFiltro] = useState("");
+  const [operadorFiltro, setOperadorFiltro] = useState("");
+  const [acaoFiltro, setAcaoFiltro] = useState("");
+  const [gangueFiltro, setGangueFiltro] = useState("");
   const [exportingPdf, setExportingPdf] = useState(false);
   const chartsRef = useRef<HTMLDivElement>(null);
 
@@ -294,7 +316,7 @@ const Operacoes = () => {
       acaoId: op.acao?.id ?? null,
       lojaId: op.loja?.id ?? null,
       resultado: op.resultado,
-      comandoId: op.comando?.id ?? null,
+      comandoIds: op.comandos.map((c) => c.id),
       participanteIds: op.participantes.map((p) => p.id),
       gangueIds: op.gangues.map((g) => g.id),
       detalhes: op.detalhes,
@@ -310,10 +332,15 @@ const Operacoes = () => {
   const editAcaoSelecionada = acoesTipos.find((a) => a.id === editForm.acaoId);
   const editPrecisaLoja = editAcaoSelecionada?.nome === "Loja de Departamento";
 
-  const operacoesFiltradas = useMemo(
-    () => (mesFiltro ? operacoes.filter((o) => o.data.startsWith(mesFiltro)) : operacoes),
-    [operacoes, mesFiltro]
-  );
+  const operacoesFiltradas = useMemo(() => {
+    return operacoes.filter((o) => {
+      if (mesFiltro && !o.data.startsWith(mesFiltro)) return false;
+      if (operadorFiltro && !o.participantes.some((p) => p.id === operadorFiltro)) return false;
+      if (acaoFiltro && o.acao?.id !== acaoFiltro) return false;
+      if (gangueFiltro && !o.gangues.some((g) => g.id === gangueFiltro)) return false;
+      return true;
+    });
+  }, [operacoes, mesFiltro, operadorFiltro, acaoFiltro, gangueFiltro]);
 
   const acoesChartData = useMemo(() => {
     const counts = new Map<string, number>();
@@ -337,9 +364,7 @@ const Operacoes = () => {
 
   const comandosChartData = useMemo(() => {
     const counts = new Map<string, number>();
-    operacoesFiltradas.forEach((o) => {
-      if (o.comando) counts.set(o.comando.nome, (counts.get(o.comando.nome) ?? 0) + 1);
-    });
+    operacoesFiltradas.forEach((o) => o.comandos.forEach((c) => counts.set(c.nome, (counts.get(c.nome) ?? 0) + 1)));
     return Array.from(counts.entries()).map(([nome, total]) => ({ nome, total })).sort((a, b) => b.total - a.total);
   }, [operacoesFiltradas]);
 
@@ -366,10 +391,11 @@ const Operacoes = () => {
       "Ação": op.acao?.nome ?? "",
       Loja: op.loja?.nome ?? "",
       Resultado: op.resultado,
-      Comando: op.comando?.nome ?? "",
+      Comando: op.comandos.map((c) => c.nome).join(", "),
       Participantes: op.participantes.map((p) => p.nome).join(", "),
       Gangues: op.gangues.map((g) => g.nome).join(", "),
       Detalhes: op.detalhes,
+      "Enviado por": op.criadoPor ?? "",
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -475,10 +501,10 @@ const Operacoes = () => {
           </div>
           <div className="space-y-2">
             <Label className="text-xs uppercase tracking-wider text-muted-foreground">Comando da Ação</Label>
-            <CreatableSelect
+            <MultiSelect
               options={membrosOptions}
-              value={form.comandoId}
-              onChange={(id) => setForm((f) => ({ ...f, comandoId: id }))}
+              value={form.comandoIds}
+              onChange={(ids) => setForm((f) => ({ ...f, comandoIds: ids }))}
               placeholder="Selecione quem comandou"
             />
           </div>
@@ -575,6 +601,42 @@ const Operacoes = () => {
                 </div>
               </div>
 
+              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Filtrar gráficos</Label>
+                <select
+                  value={operadorFiltro}
+                  onChange={(e) => setOperadorFiltro(e.target.value)}
+                  className="rounded-md border border-border bg-muted/50 px-2 py-1.5 text-xs text-foreground"
+                >
+                  <option value="">Todos os operadores</option>
+                  {membrosOptions.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
+                </select>
+                <select
+                  value={acaoFiltro}
+                  onChange={(e) => setAcaoFiltro(e.target.value)}
+                  className="rounded-md border border-border bg-muted/50 px-2 py-1.5 text-xs text-foreground"
+                >
+                  <option value="">Todas as ações</option>
+                  {acoesTipos.map((a) => <option key={a.id} value={a.id}>{a.nome}</option>)}
+                </select>
+                <select
+                  value={gangueFiltro}
+                  onChange={(e) => setGangueFiltro(e.target.value)}
+                  className="rounded-md border border-border bg-muted/50 px-2 py-1.5 text-xs text-foreground"
+                >
+                  <option value="">Todas as gangues</option>
+                  {gangues.map((g) => <option key={g.id} value={g.id}>{g.nome}</option>)}
+                </select>
+                {(operadorFiltro || acaoFiltro || gangueFiltro) && (
+                  <button
+                    onClick={() => { setOperadorFiltro(""); setAcaoFiltro(""); setGangueFiltro(""); }}
+                    className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+                  >
+                    Limpar filtros
+                  </button>
+                )}
+              </div>
+
               {operacoesFiltradas.length === 0 ? (
                 <div className="rounded-xl border border-border bg-card p-12 text-center">
                   <Target className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
@@ -635,12 +697,15 @@ const Operacoes = () => {
                           </div>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          Comando: {op.comando?.nome ?? "—"} · Participantes: {op.participantes.map((p) => p.nome).join(", ") || "—"}
+                          Comando: {op.comandos.map((c) => c.nome).join(", ") || "—"} · Participantes: {op.participantes.map((p) => p.nome).join(", ") || "—"}
                         </p>
                         {op.gangues.length > 0 && (
                           <p className="mt-1 text-xs text-muted-foreground">Gangues: {op.gangues.map((g) => g.nome).join(", ")}</p>
                         )}
                         {op.detalhes && <p className="mt-2 text-sm text-foreground/90">{op.detalhes}</p>}
+                        <p className="mt-2 text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                          Enviado por: {op.criadoPor ?? "—"}
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -698,10 +763,10 @@ const Operacoes = () => {
               </div>
               <div className="space-y-2">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">Comando da Ação</Label>
-                <CreatableSelect
+                <MultiSelect
                   options={membrosOptions}
-                  value={editForm.comandoId}
-                  onChange={(id) => setEditForm((f) => ({ ...f, comandoId: id }))}
+                  value={editForm.comandoIds}
+                  onChange={(ids) => setEditForm((f) => ({ ...f, comandoIds: ids }))}
                   placeholder="Selecione quem comandou"
                 />
               </div>
