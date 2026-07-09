@@ -8,6 +8,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import Sobre from "./pages/Sobre";
 import Manual from "./pages/Manual";
 import Membros from "./pages/Membros";
 import Inscricoes from "./pages/Inscricoes";
@@ -39,6 +40,11 @@ const App = () => (
             <Route path="/dashboard" element={
               <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
                 <DashboardLayout><Dashboard /></DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/dashboard/sobre" element={
+              <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+                <DashboardLayout><Sobre /></DashboardLayout>
               </ProtectedRoute>
             } />
             <Route path="/dashboard/manual" element={

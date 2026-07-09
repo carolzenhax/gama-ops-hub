@@ -3,6 +3,7 @@ import type { Role } from "@/contexts/AuthContext";
 export const ROLE_PERMISSIONS: Record<Role, string[]> = {
   comando: [
     "/dashboard",
+    "/dashboard/sobre",
     "/dashboard/manual",
     "/dashboard/membros",
     "/dashboard/inscricoes",
@@ -13,6 +14,7 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
   ],
   membro: [
     "/dashboard",
+    "/dashboard/sobre",
     "/dashboard/manual",
     "/dashboard/membros",
     "/dashboard/inscricoes",
@@ -22,6 +24,7 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
   ],
   visitante: [
     "/dashboard",
+    "/dashboard/sobre",
     "/dashboard/manual",
     "/dashboard/galeria",
     "/dashboard/curso",

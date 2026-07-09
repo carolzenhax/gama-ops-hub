@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
-  Home, BookOpen, Users, FileText, Image, GraduationCap, UserCog, LogOut, Menu, Shield, Target,
+  Home, BookOpen, Users, FileText, Image, GraduationCap, UserCog, LogOut, Menu, Shield, Target, Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ import { canAccess } from "@/lib/permissions";
 
 const navItems = [
   { to: "/dashboard", icon: Home, label: "Home" },
+  { to: "/dashboard/sobre", icon: Info, label: "Sobre" },
   { to: "/dashboard/manual", icon: BookOpen, label: "Manual" },
   { to: "/dashboard/curso", icon: GraduationCap, label: "Cursos" },
   { to: "/dashboard/membros", icon: Users, label: "Membros" },
