@@ -240,6 +240,17 @@ const Operacoes = () => {
     return data;
   };
 
+  const createMembro = async (nome: string): Promise<Option> => {
+    const { data, error } = await supabase
+      .from("membros")
+      .insert({ nome, cargo: "Estágio", classe: "Estágio" })
+      .select("id, nome")
+      .single();
+    if (error) throw error;
+    queryClient.setQueryData<Option[]>(["membros_options"], (prev = []) => [...prev, data].sort((a, b) => a.nome.localeCompare(b.nome)));
+    return data;
+  };
+
   const createOperacao = useMutation({
     mutationFn: async (form: typeof EMPTY_FORM) => {
       const operacaoId = crypto.randomUUID();
@@ -582,7 +593,8 @@ const Operacoes = () => {
               options={membrosOptions}
               value={form.participanteIds}
               onChange={(ids) => setForm((f) => ({ ...f, participanteIds: ids }))}
-              placeholder="Selecione os participantes"
+              onCreate={createMembro}
+              placeholder="Selecione ou crie um participante"
             />
           </div>
           <div className="space-y-2">
@@ -895,7 +907,8 @@ const Operacoes = () => {
                   options={membrosOptions}
                   value={editForm.participanteIds}
                   onChange={(ids) => setEditForm((f) => ({ ...f, participanteIds: ids }))}
-                  placeholder="Selecione os participantes"
+                  onCreate={createMembro}
+                  placeholder="Selecione ou crie um participante"
                 />
               </div>
               <div className="space-y-2">
