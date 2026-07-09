@@ -19,7 +19,7 @@ interface Membro {
 
 interface ChecklistItem { id: string; item: string; concluido: boolean; }
 
-const CLASSE_ORDER = ["Comando", "Sub-comando", "Operador", "Estágio"];
+const CLASSE_ORDER = ["Comando", "Sub-comando", "Operador", "Estágio", "Chaveirinho"];
 const classes = ["Todos", ...CLASSE_ORDER];
 const classeOptions = CLASSE_ORDER;
 
