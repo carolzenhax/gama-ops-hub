@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Users, Filter, Plus, Pencil, Trash2 } from "lucide-react";
+import {
+  Users, Filter, Plus, Pencil, Trash2, Eye, IdCard, Award, Briefcase, CalendarDays, Check, X,
+} from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,17 +12,35 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 
-interface Membro { id: string; name: string; cargo: string; classe: string; fotoUrl: string; }
+interface Membro {
+  id: string; name: string; cargo: string; classe: string; fotoUrl: string;
+  passaporte: string; patente: string; dataIngresso: string;
+}
+
+interface ChecklistItem { id: string; item: string; concluido: boolean; }
 
 const classes = ["Todos", "Comando", "Sub-comando", "Operador", "Estágio"];
 const classeOptions = ["Comando", "Sub-comando", "Operador", "Estágio"];
 
-const EMPTY_FORM = { name: "", cargo: "", classe: "Operador", fotoUrl: "" };
+const EMPTY_FORM = { name: "", cargo: "", classe: "Operador", fotoUrl: "", passaporte: "", patente: "", dataIngresso: "" };
 
 async function fetchMembers(): Promise<Membro[]> {
-  const { data, error } = await supabase.from("membros").select("id, nome, cargo, classe, foto_url");
+  const { data, error } = await supabase.from("membros").select("id, nome, cargo, classe, foto_url, passaporte, patente, data_ingresso");
   if (error) throw error;
-  return data.map((m) => ({ id: m.id, name: m.nome, cargo: m.cargo, classe: m.classe, fotoUrl: m.foto_url ?? "" }));
+  return data.map((m) => ({
+    id: m.id, name: m.nome, cargo: m.cargo, classe: m.classe, fotoUrl: m.foto_url ?? "",
+    passaporte: m.passaporte ?? "", patente: m.patente ?? "", dataIngresso: m.data_ingresso ?? "",
+  }));
+}
+
+async function fetchChecklist(membroId: string): Promise<ChecklistItem[]> {
+  const { data, error } = await supabase
+    .from("membros_checklist")
+    .select("id, item, concluido")
+    .eq("membro_id", membroId)
+    .order("created_at");
+  if (error) throw error;
+  return data;
 }
 
 const Membros = () => {
@@ -33,7 +53,10 @@ const Membros = () => {
 
   const saveMember = useMutation({
     mutationFn: async ({ id, ...form }: { id?: string } & typeof EMPTY_FORM) => {
-      const payload = { nome: form.name, cargo: form.cargo, classe: form.classe, foto_url: form.fotoUrl || null };
+      const payload = {
+        nome: form.name, cargo: form.cargo, classe: form.classe, foto_url: form.fotoUrl || null,
+        passaporte: form.passaporte || null, patente: form.patente || null, data_ingresso: form.dataIngresso || null,
+      };
       if (id) {
         const { error } = await supabase.from("membros").update(payload).eq("id", id);
         if (error) throw error;
@@ -57,6 +80,8 @@ const Membros = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Membro | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [detailsTarget, setDetailsTarget] = useState<Membro | null>(null);
+  const [newChecklistItem, setNewChecklistItem] = useState("");
 
   const filtered = filter === "Todos" ? members : members.filter((m) => m.classe === filter);
 
@@ -68,7 +93,10 @@ const Membros = () => {
 
   const openEdit = (m: Membro) => {
     setEditing(m);
-    setForm({ name: m.name, cargo: m.cargo, classe: m.classe, fotoUrl: m.fotoUrl });
+    setForm({
+      name: m.name, cargo: m.cargo, classe: m.classe, fotoUrl: m.fotoUrl,
+      passaporte: m.passaporte, patente: m.patente, dataIngresso: m.dataIngresso,
+    });
     setDialogOpen(true);
   };
 
@@ -79,6 +107,44 @@ const Membros = () => {
   };
 
   const handleDelete = (id: string) => deleteMember.mutate(id);
+
+  const { data: checklist = [] } = useQuery({
+    queryKey: ["membros_checklist", detailsTarget?.id],
+    queryFn: () => fetchChecklist(detailsTarget!.id),
+    enabled: !!detailsTarget,
+  });
+
+  const invalidateChecklist = () => queryClient.invalidateQueries({ queryKey: ["membros_checklist", detailsTarget?.id] });
+
+  const addChecklistItem = useMutation({
+    mutationFn: async (item: string) => {
+      const { error } = await supabase.from("membros_checklist").insert({ membro_id: detailsTarget!.id, item, concluido: false });
+      if (error) throw error;
+    },
+    onSuccess: invalidateChecklist,
+  });
+
+  const toggleChecklistItem = useMutation({
+    mutationFn: async ({ id, concluido }: { id: string; concluido: boolean }) => {
+      const { error } = await supabase.from("membros_checklist").update({ concluido }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidateChecklist,
+  });
+
+  const deleteChecklistItem = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("membros_checklist").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidateChecklist,
+  });
+
+  const handleAddChecklistItem = () => {
+    if (!newChecklistItem.trim()) return;
+    addChecklistItem.mutate(newChecklistItem.trim());
+    setNewChecklistItem("");
+  };
 
   return (
     <div className="space-y-6">
@@ -135,21 +201,27 @@ const Membros = () => {
                   {m.classe}
                 </span>
               </div>
-              {isAdmin && (
-                <div className="flex shrink-0 gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                  <button onClick={() => openEdit(m)} className="text-muted-foreground transition-colors hover:text-foreground">
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => handleDelete(m.id)} className="text-muted-foreground transition-colors hover:text-destructive">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
+              <div className="flex shrink-0 gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                <button onClick={() => setDetailsTarget(m)} className="text-muted-foreground transition-colors hover:text-foreground">
+                  <Eye className="h-3.5 w-3.5" />
+                </button>
+                {isAdmin && (
+                  <>
+                    <button onClick={() => openEdit(m)} className="text-muted-foreground transition-colors hover:text-foreground">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => handleDelete(m.id)} className="text-muted-foreground transition-colors hover:text-destructive">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </motion.div>
         ))}
       </div>
 
+      {/* Novo / Editar Membro */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -174,6 +246,20 @@ const Membros = () => {
                 {classeOptions.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Passaporte (opcional)</Label>
+                <Input value={form.passaporte} onChange={(e) => setForm((f) => ({ ...f, passaporte: e.target.value }))} placeholder="Ex: 1115" className="bg-muted/50" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Patente (opcional)</Label>
+                <Input value={form.patente} onChange={(e) => setForm((f) => ({ ...f, patente: e.target.value }))} placeholder="Ex: 2° Sargento" className="bg-muted/50" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Data de Ingresso (opcional)</Label>
+              <Input type="date" value={form.dataIngresso} onChange={(e) => setForm((f) => ({ ...f, dataIngresso: e.target.value }))} className="bg-muted/50" />
+            </div>
             <div className="space-y-2">
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">URL da Foto (opcional)</Label>
               <Input value={form.fotoUrl} onChange={(e) => setForm((f) => ({ ...f, fotoUrl: e.target.value }))} placeholder="https://..." className="bg-muted/50" />
@@ -182,6 +268,84 @@ const Membros = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ver Detalhes */}
+      <Dialog open={!!detailsTarget} onOpenChange={(open) => !open && setDetailsTarget(null)}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="font-display tracking-wider">{detailsTarget?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-6 sm:grid-cols-2">
+            <div className="space-y-3">
+              <h3 className="font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">Informações</h3>
+              <div className="flex items-center gap-2 text-sm">
+                <IdCard className="h-4 w-4 shrink-0 text-accent" />
+                <span className="text-muted-foreground">Passaporte —</span> {detailsTarget?.passaporte || "—"}
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Award className="h-4 w-4 shrink-0 text-accent" />
+                <span className="text-muted-foreground">Patente —</span> {detailsTarget?.patente || "—"}
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Briefcase className="h-4 w-4 shrink-0 text-accent" />
+                <span className="text-muted-foreground">Cargo —</span> {detailsTarget?.cargo || "—"}
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <CalendarDays className="h-4 w-4 shrink-0 text-accent" />
+                <span className="text-muted-foreground">Ingresso —</span>{" "}
+                {detailsTarget?.dataIngresso ? new Date(detailsTarget.dataIngresso + "T00:00:00").toLocaleDateString("pt-BR") : "—"}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="font-display text-xs font-bold uppercase tracking-wider text-accent">Checklist p/ Promoção</h3>
+              <div className="space-y-2">
+                {checklist.length === 0 && <p className="text-xs text-muted-foreground">Nenhum item ainda.</p>}
+                {checklist.map((item) => (
+                  <div key={item.id} className="flex items-center gap-2">
+                    <button
+                      disabled={!isAdmin}
+                      onClick={() => toggleChecklistItem.mutate({ id: item.id, concluido: !item.concluido })}
+                      className={cn(
+                        "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                        item.concluido ? "border-primary bg-primary/20 text-primary-foreground" : "border-border",
+                        isAdmin && "cursor-pointer"
+                      )}
+                    >
+                      {item.concluido && <Check className="h-3 w-3" />}
+                    </button>
+                    <span className={cn("flex-1 text-sm", item.concluido && "text-muted-foreground line-through")}>
+                      {item.item}
+                    </span>
+                    {isAdmin && (
+                      <button onClick={() => deleteChecklistItem.mutate(item.id)} className="text-muted-foreground hover:text-destructive">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {isAdmin && (
+                <div className="flex gap-2 pt-2">
+                  <Input
+                    value={newChecklistItem}
+                    onChange={(e) => setNewChecklistItem(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddChecklistItem()}
+                    placeholder="Novo item..."
+                    className="h-8 bg-muted/50 text-sm"
+                  />
+                  <Button size="sm" onClick={handleAddChecklistItem} className="h-8 shrink-0 gap-1 text-xs">
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailsTarget(null)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
