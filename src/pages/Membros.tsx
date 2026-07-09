@@ -54,6 +54,7 @@ async function fetchChecklist(membroId: string): Promise<ChecklistItem[]> {
 const Membros = () => {
   const { user } = useAuth();
   const isAdmin = user?.papel === "comando";
+  const canViewDetails = user?.papel === "comando" || user?.papel === "membro";
   const queryClient = useQueryClient();
   const { data: members = [], isLoading } = useQuery({ queryKey: ["membros"], queryFn: fetchMembers });
 
@@ -182,9 +183,11 @@ const Membros = () => {
           </span>
         </div>
         <div className="flex shrink-0 gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-          <button onClick={() => setDetailsTarget(m)} className="text-muted-foreground transition-colors hover:text-foreground">
-            <Eye className="h-3.5 w-3.5" />
-          </button>
+          {canViewDetails && (
+            <button onClick={() => setDetailsTarget(m)} className="text-muted-foreground transition-colors hover:text-foreground">
+              <Eye className="h-3.5 w-3.5" />
+            </button>
+          )}
           {isAdmin && (
             <>
               <button onClick={() => openEdit(m)} className="text-muted-foreground transition-colors hover:text-foreground">

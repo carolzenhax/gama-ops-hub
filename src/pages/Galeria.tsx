@@ -62,10 +62,22 @@ const Galeria = () => {
     onSuccess: invalidate,
   });
 
+  const deleteAlbum = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("galeria_albuns").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["galeria_albuns"] });
+      queryClient.invalidateQueries({ queryKey: ["galeria_fotos"] });
+    },
+  });
+
   const [selectedAlbum, setSelectedAlbum] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [deleteAlbumTarget, setDeleteAlbumTarget] = useState<{ id: string; nome: string } | null>(null);
 
   const photosSemAlbum = photos.filter((p) => !p.album);
   const albumCards = [
@@ -158,6 +170,14 @@ const Galeria = () => {
                     <p className="font-display text-sm tracking-wider text-foreground">{album.nome}</p>
                     <p className="text-[10px] uppercase text-muted-foreground">{album.fotos.length} foto(s)</p>
                   </div>
+                  {isAdmin && album.id !== SEM_ALBUM && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeleteAlbumTarget({ id: album.id, nome: album.nome }); }}
+                      className="absolute right-2 top-2 rounded-full bg-background/80 p-1.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               </motion.div>
             ))}
@@ -258,6 +278,29 @@ const Galeria = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleAdd}>Adicionar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete album confirmation */}
+      <Dialog open={!!deleteAlbumTarget} onOpenChange={(open) => !open && setDeleteAlbumTarget(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display tracking-wider">Excluir Álbum</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Tem certeza que deseja excluir o álbum <span className="font-medium text-foreground">{deleteAlbumTarget?.nome}</span>?
+            As fotos dele não são apagadas — ficam em "Sem Álbum".
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteAlbumTarget(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteAlbum.isPending}
+              onClick={() => deleteAlbum.mutate(deleteAlbumTarget!.id, { onSuccess: () => setDeleteAlbumTarget(null) })}
+            >
+              {deleteAlbum.isPending ? "Excluindo..." : "Excluir"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
