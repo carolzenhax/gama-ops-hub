@@ -176,7 +176,7 @@ const Operacoes = () => {
   const { data: operacoes = [], isLoading: loadingOperacoes } = useQuery({
     queryKey: ["operacoes"],
     queryFn: fetchOperacoes,
-    enabled: isComando,
+    enabled: user?.papel === "comando" || user?.papel === "membro",
   });
 
   const createLookup = (table: "acoes_tipos" | "lojas" | "gangues") => async (nome: string): Promise<Option> => {
@@ -547,6 +547,44 @@ const Operacoes = () => {
           <Send className="mr-2 h-4 w-4" /> {createOperacao.isPending ? "REGISTRANDO..." : "REGISTRAR AÇÃO"}
         </Button>
       </motion.form>
+
+      {user?.papel === "membro" && (
+        <div className="space-y-3">
+          <h2 className="font-display text-sm font-bold uppercase tracking-wider">Meus Relatórios</h2>
+          {loadingOperacoes ? (
+            <div className="h-24 animate-pulse rounded-xl border border-border bg-muted/30" />
+          ) : operacoes.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card p-8 text-center">
+              <Target className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">Você ainda não enviou nenhum relatório.</p>
+            </div>
+          ) : (
+            operacoes.map((op) => (
+              <div key={op.id} className="rounded-xl border border-border bg-card p-4">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-display text-xs text-accent">{format(parseISO(op.data), "dd/MM/yyyy")}</span>
+                    <span className="font-display text-sm font-bold">{op.acao?.nome}{op.loja ? ` — ${op.loja.nome}` : ""}</span>
+                  </div>
+                  <span
+                    className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider"
+                    style={{ backgroundColor: `${RESULTADO_COLORS[op.resultado]}33`, color: RESULTADO_COLORS[op.resultado] }}
+                  >
+                    {op.resultado}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Comando: {op.comandos.map((c) => c.nome).join(", ") || "—"} · Participantes: {op.participantes.map((p) => p.nome).join(", ") || "—"}
+                </p>
+                {op.gangues.length > 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">Gangues: {op.gangues.map((g) => g.nome).join(", ")}</p>
+                )}
+                {op.detalhes && <p className="mt-2 text-sm text-foreground/90">{op.detalhes}</p>}
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {isComando && (
         <>
