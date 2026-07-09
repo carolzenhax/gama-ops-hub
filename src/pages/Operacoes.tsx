@@ -257,6 +257,28 @@ const Operacoes = () => {
     return data;
   };
 
+  const renameComandoExterno = useMutation({
+    mutationFn: async ({ id, nome }: { id: string; nome: string }) => {
+      const { error } = await supabase.from("comandos_externos").update({ nome }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["comandos_externos"] });
+      queryClient.invalidateQueries({ queryKey: ["operacoes"] });
+    },
+  });
+
+  const deleteComandoExterno = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("comandos_externos").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["comandos_externos"] });
+      queryClient.invalidateQueries({ queryKey: ["operacoes"] });
+    },
+  });
+
   const createOperacao = useMutation({
     mutationFn: async (form: typeof EMPTY_FORM) => {
       const operacaoId = crypto.randomUUID();
@@ -390,6 +412,9 @@ const Operacoes = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<Operacao | null>(null);
+  const [renameCETarget, setRenameCETarget] = useState<Option | null>(null);
+  const [renameCEValue, setRenameCEValue] = useState("");
+  const [deleteCETarget, setDeleteCETarget] = useState<Option | null>(null);
   const [mesFiltro, setMesFiltro] = useState("");
   const [operadorFiltro, setOperadorFiltro] = useState("");
   const [acaoFiltro, setAcaoFiltro] = useState("");
@@ -616,6 +641,8 @@ const Operacoes = () => {
             value={form.comandoExternoIds}
             onChange={(ids) => setForm((f) => ({ ...f, comandoExternoIds: ids }))}
             onCreate={createLookup("comandos_externos")}
+            onRename={isComando ? (o) => { setRenameCETarget(o); setRenameCEValue(o.nome); } : undefined}
+            onDelete={isComando ? (o) => setDeleteCETarget(o) : undefined}
             placeholder="Selecione ou crie um nome"
           />
         </div>
@@ -941,6 +968,8 @@ const Operacoes = () => {
                 value={editForm.comandoExternoIds}
                 onChange={(ids) => setEditForm((f) => ({ ...f, comandoExternoIds: ids }))}
                 onCreate={createLookup("comandos_externos")}
+                onRename={isComando ? (o) => { setRenameCETarget(o); setRenameCEValue(o.nome); } : undefined}
+                onDelete={isComando ? (o) => setDeleteCETarget(o) : undefined}
                 placeholder="Selecione ou crie um nome"
               />
             </div>
@@ -1004,6 +1033,52 @@ const Operacoes = () => {
               onClick={() => deleteOperacao.mutate(deleteTarget!.id, { onSuccess: () => setDeleteTarget(null) })}
             >
               {deleteOperacao.isPending ? "Excluindo..." : "Excluir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!renameCETarget} onOpenChange={(open) => !open && setRenameCETarget(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display tracking-wider">Renomear Comando Externo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Nome</Label>
+            <Input value={renameCEValue} onChange={(e) => setRenameCEValue(e.target.value)} className="bg-muted/50" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameCETarget(null)}>Cancelar</Button>
+            <Button
+              disabled={renameComandoExterno.isPending || !renameCEValue.trim()}
+              onClick={() => renameComandoExterno.mutate(
+                { id: renameCETarget!.id, nome: renameCEValue.trim() },
+                { onSuccess: () => setRenameCETarget(null) }
+              )}
+            >
+              {renameComandoExterno.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteCETarget} onOpenChange={(open) => !open && setDeleteCETarget(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display tracking-wider">Excluir Comando Externo</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Tem certeza que deseja excluir <span className="font-medium text-foreground">{deleteCETarget?.nome}</span>?
+            Ele é removido das ações que o usavam, mas as ações continuam existindo.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteCETarget(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteComandoExterno.isPending}
+              onClick={() => deleteComandoExterno.mutate(deleteCETarget!.id, { onSuccess: () => setDeleteCETarget(null) })}
+            >
+              {deleteComandoExterno.isPending ? "Excluindo..." : "Excluir"}
             </Button>
           </DialogFooter>
         </DialogContent>
