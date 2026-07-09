@@ -116,7 +116,7 @@ const Curso = () => {
             </div>
 
             <h3 className="font-display text-sm font-bold tracking-wide text-foreground">{curso.nome}</h3>
-            <p className="mt-0.5 text-xs text-accent">Aplicador: {curso.aplicador}</p>
+            <p className="mt-0.5 text-xs text-accent">Autor: {curso.aplicador}</p>
 
             <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground">{curso.descricao}</p>
 
@@ -128,7 +128,7 @@ const Curso = () => {
                 className="mt-4 flex items-center gap-1.5 text-xs text-primary underline-offset-4 hover:underline"
                 onClick={(e) => e.stopPropagation()}
               >
-                <ExternalLink className="h-3.5 w-3.5" /> Assistir vídeo do curso
+                <ExternalLink className="h-3.5 w-3.5" /> Acessar documento
               </a>
             )}
           </motion.div>
@@ -146,7 +146,7 @@ const Curso = () => {
               <Input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} placeholder="Ex: Abordagem Tática Avançada" className="bg-muted/50" />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Aplicador</Label>
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Autor</Label>
               <Input value={form.aplicador} onChange={(e) => setForm((f) => ({ ...f, aplicador: e.target.value }))} placeholder="Ex: Sgt. João Silva" className="bg-muted/50" />
             </div>
             <div className="space-y-2">
@@ -154,8 +154,8 @@ const Curso = () => {
               <Textarea value={form.descricao} onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))} placeholder="Descreva o conteúdo do curso..." className="bg-muted/50" rows={3} />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Link do Vídeo (opcional)</Label>
-              <Input value={form.videoUrl} onChange={(e) => setForm((f) => ({ ...f, videoUrl: e.target.value }))} placeholder="https://youtube.com/..." className="bg-muted/50" />
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Link do Documento (opcional)</Label>
+              <Input value={form.videoUrl} onChange={(e) => setForm((f) => ({ ...f, videoUrl: e.target.value }))} placeholder="https://docs.google.com/..." className="bg-muted/50" />
             </div>
           </div>
           <DialogFooter>
