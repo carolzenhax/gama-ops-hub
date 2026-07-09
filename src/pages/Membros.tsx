@@ -19,8 +19,9 @@ interface Membro {
 
 interface ChecklistItem { id: string; item: string; concluido: boolean; }
 
-const classes = ["Todos", "Comando", "Sub-comando", "Operador", "Estágio"];
-const classeOptions = ["Comando", "Sub-comando", "Operador", "Estágio"];
+const CLASSE_ORDER = ["Comando", "Sub-comando", "Operador", "Estágio"];
+const classes = ["Todos", ...CLASSE_ORDER];
+const classeOptions = CLASSE_ORDER;
 
 const EMPTY_FORM = { name: "", cargo: "", classe: "Operador", fotoUrl: "", passaporte: "", patente: "", dataIngresso: "" };
 
@@ -83,7 +84,11 @@ const Membros = () => {
   const [detailsTarget, setDetailsTarget] = useState<Membro | null>(null);
   const [newChecklistItem, setNewChecklistItem] = useState("");
 
-  const filtered = filter === "Todos" ? members : members.filter((m) => m.classe === filter);
+  const byName = (a: Membro, b: Membro) => a.name.localeCompare(b.name);
+  const filtered = (filter === "Todos" ? members : members.filter((m) => m.classe === filter)).slice().sort(byName);
+  const grouped = CLASSE_ORDER
+    .map((classe) => ({ classe, items: members.filter((m) => m.classe === classe).slice().sort(byName) }))
+    .filter((g) => g.items.length > 0);
 
   const openAdd = () => {
     setEditing(null);
@@ -146,6 +151,48 @@ const Membros = () => {
     setNewChecklistItem("");
   };
 
+  const renderCard = (m: Membro, i: number) => (
+    <motion.div
+      key={m.id}
+      className="group rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40"
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: i * 0.05 }}
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/20">
+          {m.fotoUrl ? (
+            <img src={m.fotoUrl} alt={m.name} className="h-full w-full object-cover" loading="lazy" />
+          ) : (
+            <Users className="h-5 w-5 text-primary-foreground" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-foreground">{m.name}</p>
+          <p className="text-sm text-muted-foreground">{m.cargo}</p>
+          <span className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+            {m.classe}
+          </span>
+        </div>
+        <div className="flex shrink-0 gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+          <button onClick={() => setDetailsTarget(m)} className="text-muted-foreground transition-colors hover:text-foreground">
+            <Eye className="h-3.5 w-3.5" />
+          </button>
+          {isAdmin && (
+            <>
+              <button onClick={() => openEdit(m)} className="text-muted-foreground transition-colors hover:text-foreground">
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={() => handleDelete(m.id)} className="text-muted-foreground transition-colors hover:text-destructive">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -175,51 +222,28 @@ const Membros = () => {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {isLoading
-          ? [1, 2, 3, 4, 5, 6].map((i) => <div key={i} className="h-20 animate-pulse rounded-xl border border-border bg-muted/30" />)
-          : filtered.map((m, i) => (
-          <motion.div
-            key={m.id}
-            className="group rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-          >
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/20">
-                {m.fotoUrl ? (
-                  <img src={m.fotoUrl} alt={m.name} className="h-full w-full object-cover" loading="lazy" />
-                ) : (
-                  <Users className="h-5 w-5 text-primary-foreground" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-foreground">{m.name}</p>
-                <p className="text-sm text-muted-foreground">{m.cargo}</p>
-                <span className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-                  {m.classe}
-                </span>
-              </div>
-              <div className="flex shrink-0 gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                <button onClick={() => setDetailsTarget(m)} className="text-muted-foreground transition-colors hover:text-foreground">
-                  <Eye className="h-3.5 w-3.5" />
-                </button>
-                {isAdmin && (
-                  <>
-                    <button onClick={() => openEdit(m)} className="text-muted-foreground transition-colors hover:text-foreground">
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button onClick={() => handleDelete(m.id)} className="text-muted-foreground transition-colors hover:text-destructive">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </>
-                )}
+      {isLoading ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => <div key={i} className="h-20 animate-pulse rounded-xl border border-border bg-muted/30" />)}
+        </div>
+      ) : filter === "Todos" ? (
+        <div className="space-y-6">
+          {grouped.map((g) => (
+            <div key={g.classe} className="space-y-3">
+              <h2 className="font-display text-xs font-bold uppercase tracking-widest text-accent">
+                {g.classe} <span className="text-muted-foreground">({g.items.length})</span>
+              </h2>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {g.items.map((m, i) => renderCard(m, i))}
               </div>
             </div>
-          </motion.div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((m, i) => renderCard(m, i))}
+        </div>
+      )}
 
       {/* Novo / Editar Membro */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
