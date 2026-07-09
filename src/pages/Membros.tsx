@@ -276,7 +276,16 @@ const Membros = () => {
       <Dialog open={!!detailsTarget} onOpenChange={(open) => !open && setDetailsTarget(null)}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle className="font-display tracking-wider">{detailsTarget?.name}</DialogTitle>
+            <div className="flex items-center gap-4">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/20">
+                {detailsTarget?.fotoUrl ? (
+                  <img src={detailsTarget.fotoUrl} alt={detailsTarget.name} className="h-full w-full object-cover" />
+                ) : (
+                  <Users className="h-7 w-7 text-primary-foreground" />
+                )}
+              </div>
+              <DialogTitle className="font-display tracking-wider">{detailsTarget?.name}</DialogTitle>
+            </div>
           </DialogHeader>
           <div className="grid gap-6 sm:grid-cols-2">
             <div className="space-y-3">
