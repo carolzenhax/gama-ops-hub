@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Shield, Lock, User, ArrowLeft } from "lucide-react";
+import { Shield, Lock, User, ArrowLeft, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,10 +13,11 @@ const Login = () => {
   const [id, setId] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [visitorLoading, setVisitorLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { login } = useAuth();
+  const { login, loginAsVisitante } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,6 +31,19 @@ const Login = () => {
     setIsLoading(false);
     if (result.success) {
       toast({ title: "Acesso autorizado", description: "Bem-vindo ao sistema GAMA." });
+      navigate("/dashboard");
+    } else {
+      setErrorMsg(result.error ?? "Erro desconhecido.");
+    }
+  };
+
+  const handleVisitorLogin = async () => {
+    setVisitorLoading(true);
+    setErrorMsg(null);
+    const result = await loginAsVisitante();
+    setVisitorLoading(false);
+    if (result.success) {
+      toast({ title: "Acesso de visitante", description: "Bem-vindo ao sistema GAMA." });
       navigate("/dashboard");
     } else {
       setErrorMsg(result.error ?? "Erro desconhecido.");
@@ -122,6 +136,32 @@ const Login = () => {
               <p className="text-center text-xs text-destructive">{errorMsg}</p>
             )}
           </form>
+
+          <div className="mt-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">ou</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleVisitorLogin}
+            disabled={visitorLoading || isLoading}
+            className="mt-4 w-full gap-2 border-border text-xs tracking-widest"
+          >
+            {visitorLoading ? (
+              <span className="flex items-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                ENTRANDO...
+              </span>
+            ) : (
+              <>
+                <Eye className="h-4 w-4" />
+                ENTRAR COMO VISITANTE
+              </>
+            )}
+          </Button>
 
           <div className="mt-6 text-center">
             <Link to="/inscricoes" className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline transition-colors">

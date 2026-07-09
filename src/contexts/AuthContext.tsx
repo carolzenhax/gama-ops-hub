@@ -14,6 +14,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   loading: boolean;
   login: (id: string, senha: string) => Promise<{ success: boolean; error?: string }>;
+  loginAsVisitante: () => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
 }
 
@@ -59,12 +60,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { success: true };
   };
 
+  const loginAsVisitante = async (): Promise<{ success: boolean; error?: string }> => {
+    const { error } = await supabase.auth.signInAnonymously();
+    if (error) return { success: false, error: "Não foi possível entrar como visitante." };
+    return { success: true };
+  };
+
   const logout = () => {
     supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: user !== null, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: user !== null, loading, login, loginAsVisitante, logout }}>
       {children}
     </AuthContext.Provider>
   );
