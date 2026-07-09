@@ -10,17 +10,17 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 
-interface Membro { id: string; name: string; cargo: string; classe: string; }
+interface Membro { id: string; name: string; cargo: string; classe: string; fotoUrl: string; }
 
 const classes = ["Todos", "Comando", "Sub-comando", "Operador", "Estágio"];
 const classeOptions = ["Comando", "Sub-comando", "Operador", "Estágio"];
 
-const EMPTY_FORM = { name: "", cargo: "", classe: "Operador" };
+const EMPTY_FORM = { name: "", cargo: "", classe: "Operador", fotoUrl: "" };
 
 async function fetchMembers(): Promise<Membro[]> {
-  const { data, error } = await supabase.from("membros").select("id, nome, cargo, classe");
+  const { data, error } = await supabase.from("membros").select("id, nome, cargo, classe, foto_url");
   if (error) throw error;
-  return data.map((m) => ({ id: m.id, name: m.nome, cargo: m.cargo, classe: m.classe }));
+  return data.map((m) => ({ id: m.id, name: m.nome, cargo: m.cargo, classe: m.classe, fotoUrl: m.foto_url ?? "" }));
 }
 
 const Membros = () => {
@@ -33,7 +33,7 @@ const Membros = () => {
 
   const saveMember = useMutation({
     mutationFn: async ({ id, ...form }: { id?: string } & typeof EMPTY_FORM) => {
-      const payload = { nome: form.name, cargo: form.cargo, classe: form.classe };
+      const payload = { nome: form.name, cargo: form.cargo, classe: form.classe, foto_url: form.fotoUrl || null };
       if (id) {
         const { error } = await supabase.from("membros").update(payload).eq("id", id);
         if (error) throw error;
@@ -68,7 +68,7 @@ const Membros = () => {
 
   const openEdit = (m: Membro) => {
     setEditing(m);
-    setForm({ name: m.name, cargo: m.cargo, classe: m.classe });
+    setForm({ name: m.name, cargo: m.cargo, classe: m.classe, fotoUrl: m.fotoUrl });
     setDialogOpen(true);
   };
 
@@ -121,8 +121,12 @@ const Membros = () => {
             transition={{ delay: i * 0.05 }}
           >
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/20">
-                <Users className="h-5 w-5 text-primary-foreground" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/20">
+                {m.fotoUrl ? (
+                  <img src={m.fotoUrl} alt={m.name} className="h-full w-full object-cover" loading="lazy" />
+                ) : (
+                  <Users className="h-5 w-5 text-primary-foreground" />
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-foreground">{m.name}</p>
@@ -169,6 +173,10 @@ const Membros = () => {
               >
                 {classeOptions.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">URL da Foto (opcional)</Label>
+              <Input value={form.fotoUrl} onChange={(e) => setForm((f) => ({ ...f, fotoUrl: e.target.value }))} placeholder="https://..." className="bg-muted/50" />
             </div>
           </div>
           <DialogFooter>
