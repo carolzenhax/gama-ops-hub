@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { format, parseISO } from "date-fns";
-import { Target, Send, Download, FileDown } from "lucide-react";
+import { Target, Send, Download, FileDown, Pencil, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
@@ -215,7 +216,64 @@ const Operacoes = () => {
     },
   });
 
+  const updateOperacao = useMutation({
+    mutationFn: async ({ id, form }: { id: string; form: typeof EMPTY_FORM }) => {
+      const { error } = await supabase.from("operacoes").update({
+        data: form.data,
+        acao_id: form.acaoId,
+        loja_id: form.lojaId,
+        resultado: form.resultado,
+        comando_id: form.comandoId,
+        detalhes: form.detalhes,
+      }).eq("id", id);
+      if (error) throw error;
+
+      const { error: delPError } = await supabase.from("operacoes_participantes").delete().eq("operacao_id", id);
+      if (delPError) throw delPError;
+      if (form.participanteIds.length) {
+        const { error: pError } = await supabase
+          .from("operacoes_participantes")
+          .insert(form.participanteIds.map((membro_id) => ({ operacao_id: id, membro_id })));
+        if (pError) throw pError;
+      }
+
+      const { error: delGError } = await supabase.from("operacoes_gangues").delete().eq("operacao_id", id);
+      if (delGError) throw delGError;
+      if (form.gangueIds.length) {
+        const { error: gError } = await supabase
+          .from("operacoes_gangues")
+          .insert(form.gangueIds.map((gangue_id) => ({ operacao_id: id, gangue_id })));
+        if (gError) throw gError;
+      }
+    },
+    onSuccess: () => {
+      toast({ title: "Ação atualizada!" });
+      queryClient.invalidateQueries({ queryKey: ["operacoes"] });
+    },
+    onError: () => {
+      toast({ title: "Erro", description: "Não foi possível atualizar a ação.", variant: "destructive" });
+    },
+  });
+
+  const deleteOperacao = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("operacoes").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Ação excluída." });
+      queryClient.invalidateQueries({ queryKey: ["operacoes"] });
+    },
+    onError: () => {
+      toast({ title: "Erro", description: "Não foi possível excluir a ação.", variant: "destructive" });
+    },
+  });
+
   const [form, setForm] = useState(EMPTY_FORM);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState(EMPTY_FORM);
+  const [deleteTarget, setDeleteTarget] = useState<Operacao | null>(null);
   const [mesFiltro, setMesFiltro] = useState("");
   const [exportingPdf, setExportingPdf] = useState(false);
   const chartsRef = useRef<HTMLDivElement>(null);
@@ -228,6 +286,29 @@ const Operacoes = () => {
     if (!form.data || !form.acaoId || !form.resultado) return;
     createOperacao.mutate(form, { onSuccess: () => setForm(EMPTY_FORM) });
   };
+
+  const openEdit = (op: Operacao) => {
+    setEditingId(op.id);
+    setEditForm({
+      data: op.data,
+      acaoId: op.acao?.id ?? null,
+      lojaId: op.loja?.id ?? null,
+      resultado: op.resultado,
+      comandoId: op.comando?.id ?? null,
+      participanteIds: op.participantes.map((p) => p.id),
+      gangueIds: op.gangues.map((g) => g.id),
+      detalhes: op.detalhes,
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleEditSubmit = () => {
+    if (!editingId || !editForm.data || !editForm.acaoId || !editForm.resultado) return;
+    updateOperacao.mutate({ id: editingId, form: editForm }, { onSuccess: () => setEditDialogOpen(false) });
+  };
+
+  const editAcaoSelecionada = acoesTipos.find((a) => a.id === editForm.acaoId);
+  const editPrecisaLoja = editAcaoSelecionada?.nome === "Loja de Departamento";
 
   const operacoesFiltradas = useMemo(
     () => (mesFiltro ? operacoes.filter((o) => o.data.startsWith(mesFiltro)) : operacoes),
@@ -538,12 +619,20 @@ const Operacoes = () => {
                             <span className="font-display text-xs text-accent">{format(parseISO(op.data), "dd/MM/yyyy")}</span>
                             <span className="font-display text-sm font-bold">{op.acao?.nome}{op.loja ? ` — ${op.loja.nome}` : ""}</span>
                           </div>
-                          <span
-                            className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider"
-                            style={{ backgroundColor: `${RESULTADO_COLORS[op.resultado]}33`, color: RESULTADO_COLORS[op.resultado] }}
-                          >
-                            {op.resultado}
-                          </span>
+                          <div className="flex shrink-0 items-center gap-3">
+                            <span
+                              className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider"
+                              style={{ backgroundColor: `${RESULTADO_COLORS[op.resultado]}33`, color: RESULTADO_COLORS[op.resultado] }}
+                            >
+                              {op.resultado}
+                            </span>
+                            <button onClick={() => openEdit(op)} className="text-muted-foreground transition-colors hover:text-foreground">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => setDeleteTarget(op)} className="text-muted-foreground transition-colors hover:text-destructive">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
                         <p className="text-xs text-muted-foreground">
                           Comando: {op.comando?.nome ?? "—"} · Participantes: {op.participantes.map((p) => p.nome).join(", ") || "—"}
@@ -561,6 +650,125 @@ const Operacoes = () => {
           )}
         </>
       )}
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-display tracking-wider">Editar Ação</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Data</Label>
+                <Input type="date" value={editForm.data} onChange={(e) => setEditForm((f) => ({ ...f, data: e.target.value }))} className="bg-muted/50" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Ação</Label>
+                <CreatableSelect
+                  options={acoesTipos}
+                  value={editForm.acaoId}
+                  onChange={(id) => setEditForm((f) => ({ ...f, acaoId: id, lojaId: null }))}
+                  placeholder="Selecione a ação"
+                />
+              </div>
+            </div>
+
+            {editPrecisaLoja && (
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Qual Loja?</Label>
+                <CreatableSelect
+                  options={lojas}
+                  value={editForm.lojaId}
+                  onChange={(id) => setEditForm((f) => ({ ...f, lojaId: id }))}
+                  placeholder="Selecione a loja"
+                />
+              </div>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Resultado</Label>
+                <select
+                  value={editForm.resultado}
+                  onChange={(e) => setEditForm((f) => ({ ...f, resultado: e.target.value }))}
+                  className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground"
+                >
+                  {RESULTADOS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Comando da Ação</Label>
+                <CreatableSelect
+                  options={membrosOptions}
+                  value={editForm.comandoId}
+                  onChange={(id) => setEditForm((f) => ({ ...f, comandoId: id }))}
+                  placeholder="Selecione quem comandou"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Participantes</Label>
+                <MultiSelect
+                  options={membrosOptions}
+                  value={editForm.participanteIds}
+                  onChange={(ids) => setEditForm((f) => ({ ...f, participanteIds: ids }))}
+                  placeholder="Selecione os participantes"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Gangues Envolvidas</Label>
+                <MultiSelect
+                  options={gangues}
+                  value={editForm.gangueIds}
+                  onChange={(ids) => setEditForm((f) => ({ ...f, gangueIds: ids }))}
+                  onCreate={createLookup("gangues")}
+                  placeholder="Selecione ou crie uma gangue"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Detalhes</Label>
+              <Textarea
+                value={editForm.detalhes}
+                onChange={(e) => setEditForm((f) => ({ ...f, detalhes: e.target.value }))}
+                className="bg-muted/50"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleEditSubmit} disabled={updateOperacao.isPending}>
+              {updateOperacao.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display tracking-wider">Excluir Ação</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Tem certeza que deseja excluir a ação <span className="font-medium text-foreground">{deleteTarget?.acao?.nome}</span> de{" "}
+            {deleteTarget && format(parseISO(deleteTarget.data), "dd/MM/yyyy")}? Essa ação não pode ser desfeita.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteOperacao.isPending}
+              onClick={() => deleteOperacao.mutate(deleteTarget!.id, { onSuccess: () => setDeleteTarget(null) })}
+            >
+              {deleteOperacao.isPending ? "Excluindo..." : "Excluir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
