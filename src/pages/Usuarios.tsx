@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import { UserCog, Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 
-interface UserRow { id: string; nome: string; papel: string; }
+interface UserRow { id: string; nome: string; papel: string; membroId: string | null; membroNome: string | null; }
 
 const PAPEL_OPTIONS = ["comando", "membro", "visitante"];
 
@@ -19,7 +20,13 @@ const PAPEL_COLORS: Record<string, string> = {
   visitante: "bg-muted text-muted-foreground",
 };
 
-const EMPTY_FORM = { id: "", nome: "", papel: "membro", senha: "", confirmSenhaInput: "" };
+const EMPTY_FORM = { id: "", nome: "", papel: "membro", senha: "", confirmSenhaInput: "", membroId: "" };
+
+async function fetchMembrosRoster(): Promise<{ id: string; nome: string }[]> {
+  const { data, error } = await supabase.from("membros").select("id, nome").order("nome");
+  if (error) throw error;
+  return data;
+}
 
 async function callManageUsers(payload: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke("manage-users", { body: payload });
@@ -29,6 +36,7 @@ async function callManageUsers(payload: Record<string, unknown>) {
 
 const Usuarios = () => {
   const { user } = useAuth();
+  const { data: membrosRoster = [] } = useQuery({ queryKey: ["membros_options"], queryFn: fetchMembrosRoster });
 
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -68,7 +76,7 @@ const Usuarios = () => {
 
   const openEdit = (u: UserRow) => {
     setEditing(u);
-    setForm({ id: u.id, nome: u.nome, papel: u.papel, senha: "", confirmSenhaInput: "" });
+    setForm({ id: u.id, nome: u.nome, papel: u.papel, senha: "", confirmSenhaInput: "", membroId: u.membroId ?? "" });
     setFormError("");
     setDialogOpen(true);
   };
@@ -90,6 +98,7 @@ const Usuarios = () => {
       if (editing) {
         const payload: Record<string, unknown> = {
           action: "update", targetId: editing.id, newNome: form.nome.trim(), newPapel: form.papel,
+          newMembroId: form.membroId,
         };
         if (form.senha.trim()) payload.newSenha = form.senha.trim();
         data = await callManageUsers(payload);
@@ -97,7 +106,7 @@ const Usuarios = () => {
         data = await callManageUsers({
           action: "create",
           newId: form.id.trim(), newSenha: form.senha.trim(),
-          newNome: form.nome.trim(), newPapel: form.papel,
+          newNome: form.nome.trim(), newPapel: form.papel, newMembroId: form.membroId,
         });
       }
 
@@ -187,6 +196,9 @@ const Usuarios = () => {
                   <span className={cn("mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider", PAPEL_COLORS[u.papel] ?? PAPEL_COLORS.visitante)}>
                     {u.papel}
                   </span>
+                  {u.membroNome && (
+                    <p className="mt-1 text-[10px] text-muted-foreground">Vinculado a: {u.membroNome}</p>
+                  )}
                 </div>
                 <div className="flex shrink-0 gap-2 opacity-0 transition-opacity group-hover:opacity-100">
                   <button onClick={() => openEdit(u)} className="text-muted-foreground transition-colors hover:text-foreground">
@@ -231,6 +243,17 @@ const Usuarios = () => {
                 className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground"
               >
                 {PAPEL_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Vincular a Membro (opcional)</Label>
+              <select
+                value={form.membroId}
+                onChange={(e) => setForm((f) => ({ ...f, membroId: e.target.value }))}
+                className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground"
+              >
+                <option value="">Nenhum</option>
+                {membrosRoster.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
               </select>
             </div>
             <div className="space-y-2">

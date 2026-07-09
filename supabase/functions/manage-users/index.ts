@@ -49,11 +49,17 @@ Deno.serve(async (req) => {
 
   switch (body.action) {
     case "list": {
-      const { data, error } = await admin.from("profiles").select("login_id, nome, papel");
+      const { data, error } = await admin.from("profiles").select("login_id, nome, papel, membro_id, membro:membros(nome)");
       if (error) return json({ success: false, error: error.message });
       return json({
         success: true,
-        users: data.map((p) => ({ id: p.login_id, nome: p.nome, papel: p.papel })),
+        users: data.map((p) => ({
+          id: p.login_id,
+          nome: p.nome,
+          papel: p.papel,
+          membroId: p.membro_id,
+          membroNome: (p.membro as { nome: string } | null)?.nome ?? null,
+        })),
       });
     }
 
@@ -62,6 +68,7 @@ Deno.serve(async (req) => {
       const newSenha = String(body.newSenha ?? "").trim();
       const newNome = String(body.newNome ?? "").trim();
       const newPapel = String(body.newPapel ?? "").trim();
+      const newMembroId = String(body.newMembroId ?? "").trim() || null;
       if (!newId || !newSenha || !newNome || !newPapel) {
         return json({ success: false, error: "Dados incompletos." });
       }
@@ -78,7 +85,7 @@ Deno.serve(async (req) => {
       // consistência mesmo se o trigger falhar por algum motivo.
       await admin
         .from("profiles")
-        .upsert({ id: created.user!.id, nome: newNome, papel: newPapel, login_id: newId });
+        .upsert({ id: created.user!.id, nome: newNome, papel: newPapel, login_id: newId, membro_id: newMembroId });
 
       return json({ success: true });
     }
@@ -88,6 +95,7 @@ Deno.serve(async (req) => {
       const newNome = String(body.newNome ?? "").trim();
       const newPapel = String(body.newPapel ?? "").trim();
       const newSenha = String(body.newSenha ?? "").trim();
+      const newMembroId = String(body.newMembroId ?? "").trim() || null;
       if (!targetId || !newNome || !newPapel) {
         return json({ success: false, error: "Dados incompletos." });
       }
@@ -107,7 +115,7 @@ Deno.serve(async (req) => {
       const { error: updateError } = await admin.auth.admin.updateUserById(target.id, updatePayload);
       if (updateError) return json({ success: false, error: updateError.message });
 
-      await admin.from("profiles").update({ nome: newNome, papel: newPapel }).eq("id", target.id);
+      await admin.from("profiles").update({ nome: newNome, papel: newPapel, membro_id: newMembroId }).eq("id", target.id);
       return json({ success: true });
     }
 

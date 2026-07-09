@@ -22,6 +22,13 @@ import { MultiSelect } from "@/components/MultiSelect";
 
 interface Option { id: string; nome: string; }
 
+interface Observacao {
+  id: string;
+  texto: string;
+  createdAt: string;
+  autor: string | null;
+}
+
 interface Operacao {
   id: string;
   data: string;
@@ -34,6 +41,7 @@ interface Operacao {
   gangues: Option[];
   participantes: Option[];
   criadoPor: string | null;
+  observacoes: Observacao[];
 }
 
 const RESULTADOS = ["Vitória", "Derrota", "Empate"];
@@ -81,7 +89,8 @@ async function fetchOperacoes(): Promise<Operacao[]> {
       criado_por_perfil:profiles!operacoes_criado_por_fkey(nome),
       operacoes_gangues(gangue:gangues(id, nome)),
       operacoes_participantes(membro:membros!operacoes_participantes_membro_id_fkey(id, nome)),
-      operacoes_comandos(membro:membros!operacoes_comandos_membro_id_fkey(id, nome))
+      operacoes_comandos(membro:membros!operacoes_comandos_membro_id_fkey(id, nome)),
+      operacoes_observacoes(id, texto, created_at, autor:profiles!operacoes_observacoes_autor_id_fkey(nome))
     `)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -93,6 +102,7 @@ async function fetchOperacoes(): Promise<Operacao[]> {
     operacoes_gangues: { gangue: Option }[];
     operacoes_participantes: { membro: Option }[];
     operacoes_comandos: { membro: Option }[];
+    operacoes_observacoes: { id: string; texto: string; created_at: string; autor: { nome: string } | null }[];
   }>).map((row) => ({
     id: row.id, data: row.data, resultado: row.resultado, detalhes: row.detalhes, created_at: row.created_at,
     acao: row.acao, loja: row.loja,
@@ -100,6 +110,9 @@ async function fetchOperacoes(): Promise<Operacao[]> {
     participantes: row.operacoes_participantes.map((p) => p.membro),
     comandos: row.operacoes_comandos.map((c) => c.membro),
     criadoPor: row.criado_por_perfil?.nome ?? null,
+    observacoes: row.operacoes_observacoes
+      .map((o) => ({ id: o.id, texto: o.texto, createdAt: o.created_at, autor: o.autor?.nome ?? null }))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
   }));
 }
 
@@ -159,6 +172,47 @@ function CategoryBarChart({ title, data, dataKeyName = "nome" }: { title: string
           </BarChart>
         </ResponsiveContainer>
       )}
+    </div>
+  );
+}
+
+function ObservacoesSection({
+  operacao, onSubmit, isPending,
+}: {
+  operacao: Operacao; onSubmit: (operacaoId: string, texto: string) => void; isPending: boolean;
+}) {
+  const [texto, setTexto] = useState("");
+  return (
+    <div className="mt-3 space-y-2 border-t border-border pt-3">
+      {operacao.observacoes.length > 0 && (
+        <div className="space-y-2">
+          {operacao.observacoes.map((ob) => (
+            <div key={ob.id} className="rounded-lg bg-muted/30 px-3 py-2">
+              <p className="text-xs text-foreground/90">{ob.texto}</p>
+              <p className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                {ob.autor ?? "—"} · {format(parseISO(ob.createdAt), "dd/MM/yyyy HH:mm")}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Input
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          placeholder="Deixe uma observação..."
+          className="bg-muted/50 text-xs"
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0 text-xs"
+          disabled={!texto.trim() || isPending}
+          onClick={() => { onSubmit(operacao.id, texto.trim()); setTexto(""); }}
+        >
+          Comentar
+        </Button>
+      </div>
     </div>
   );
 }
@@ -271,6 +325,17 @@ const Operacoes = () => {
     },
     onError: () => {
       toast({ title: "Erro", description: "Não foi possível atualizar a ação.", variant: "destructive" });
+    },
+  });
+
+  const addObservacao = useMutation({
+    mutationFn: async ({ operacaoId, texto }: { operacaoId: string; texto: string }) => {
+      const { error } = await supabase.from("operacoes_observacoes").insert({ operacao_id: operacaoId, texto });
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["operacoes"] }),
+    onError: () => {
+      toast({ title: "Erro", description: "Não foi possível enviar a observação.", variant: "destructive" });
     },
   });
 
@@ -550,13 +615,13 @@ const Operacoes = () => {
 
       {user?.papel === "membro" && (
         <div className="space-y-3">
-          <h2 className="font-display text-sm font-bold uppercase tracking-wider">Meus Relatórios</h2>
+          <h2 className="font-display text-sm font-bold uppercase tracking-wider">Relatórios</h2>
           {loadingOperacoes ? (
             <div className="h-24 animate-pulse rounded-xl border border-border bg-muted/30" />
           ) : operacoes.length === 0 ? (
             <div className="rounded-xl border border-border bg-card p-8 text-center">
               <Target className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">Você ainda não enviou nenhum relatório.</p>
+              <p className="text-sm text-muted-foreground">Nenhum relatório seu ou de ações que você participou ainda.</p>
             </div>
           ) : (
             operacoes.map((op) => (
@@ -580,6 +645,14 @@ const Operacoes = () => {
                   <p className="mt-1 text-xs text-muted-foreground">Gangues: {op.gangues.map((g) => g.nome).join(", ")}</p>
                 )}
                 {op.detalhes && <p className="mt-2 text-sm text-foreground/90">{op.detalhes}</p>}
+                <p className="mt-2 text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                  Enviado por: {op.criadoPor ?? "—"}
+                </p>
+                <ObservacoesSection
+                  operacao={op}
+                  onSubmit={(id, texto) => addObservacao.mutate({ operacaoId: id, texto })}
+                  isPending={addObservacao.isPending}
+                />
               </div>
             ))
           )}
@@ -744,6 +817,11 @@ const Operacoes = () => {
                         <p className="mt-2 text-[10px] uppercase tracking-wider text-muted-foreground/70">
                           Enviado por: {op.criadoPor ?? "—"}
                         </p>
+                        <ObservacoesSection
+                          operacao={op}
+                          onSubmit={(id, texto) => addObservacao.mutate({ operacaoId: id, texto })}
+                          isPending={addObservacao.isPending}
+                        />
                       </div>
                     ))}
                   </div>
