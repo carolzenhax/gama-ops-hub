@@ -11,15 +11,15 @@ import { supabase } from "@/lib/supabaseClient";
 
 const EFETIVO_MAX = 15;
 
-interface Notice { id: string; date: string; text: string; }
+interface Notice { id: string; date: string; text: string; title: string; }
 
 async function fetchNotices(): Promise<Notice[]> {
   const { data, error } = await supabase
     .from("avisos")
-    .select("id, data, texto")
+    .select("id, data, texto, titulo")
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return data.map((n) => ({ id: n.id, date: n.data, text: n.texto }));
+  return data.map((n) => ({ id: n.id, date: n.data, text: n.texto, title: n.titulo ?? "" }));
 }
 
 async function fetchMembrosCount(): Promise<number> {
@@ -52,12 +52,13 @@ const Dashboard = () => {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["avisos"] });
 
   const saveNotice = useMutation({
-    mutationFn: async ({ id, date, text }: { id?: string; date: string; text: string }) => {
+    mutationFn: async ({ id, date, text, title }: { id?: string; date: string; text: string; title: string }) => {
+      const payload = { data: date, texto: text, titulo: title || null };
       if (id) {
-        const { error } = await supabase.from("avisos").update({ data: date, texto: text }).eq("id", id);
+        const { error } = await supabase.from("avisos").update(payload).eq("id", id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("avisos").insert({ data: date, texto: text });
+        const { error } = await supabase.from("avisos").insert(payload);
         if (error) throw error;
       }
     },
@@ -74,23 +75,23 @@ const Dashboard = () => {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Notice | null>(null);
-  const [form, setForm] = useState({ date: "", text: "" });
+  const [form, setForm] = useState({ date: "", text: "", title: "" });
 
   const openAdd = () => {
     setEditing(null);
-    setForm({ date: "", text: "" });
+    setForm({ date: "", text: "", title: "" });
     setDialogOpen(true);
   };
 
   const openEdit = (n: Notice) => {
     setEditing(n);
-    setForm({ date: n.date, text: n.text });
+    setForm({ date: n.date, text: n.text, title: n.title });
     setDialogOpen(true);
   };
 
   const handleSave = () => {
     if (!form.date.trim() || !form.text.trim()) return;
-    saveNotice.mutate({ id: editing?.id, date: form.date, text: form.text });
+    saveNotice.mutate({ id: editing?.id, date: form.date, text: form.text, title: form.title });
     setDialogOpen(false);
   };
 
@@ -142,7 +143,10 @@ const Dashboard = () => {
             notices.map((n) => (
               <div key={n.id} className="flex items-start gap-4 rounded-lg border border-border bg-muted/30 p-3">
                 <span className="shrink-0 font-display text-xs text-accent">{n.date}</span>
-                <p className="flex-1 text-sm text-foreground">{n.text}</p>
+                <div className="flex-1 min-w-0">
+                  {n.title && <p className="text-sm font-semibold text-foreground">{n.title}</p>}
+                  <p className="text-sm text-foreground">{n.text}</p>
+                </div>
                 {isAdmin && (
                   <div className="flex shrink-0 gap-2">
                     <button onClick={() => openEdit(n)} className="text-muted-foreground transition-colors hover:text-foreground">
@@ -165,6 +169,10 @@ const Dashboard = () => {
             <DialogTitle className="font-display tracking-wider">{editing ? "Editar Aviso" : "Novo Aviso"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Título (opcional)</Label>
+              <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Título do aviso" className="bg-muted/50" />
+            </div>
             <div className="space-y-2">
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">Data</Label>
               <Input value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} placeholder="DD/MM/AAAA" className="bg-muted/50" />
