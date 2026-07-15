@@ -57,6 +57,30 @@ const PALETTE = [
   "#eab308", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#84cc16", "#06b6d4", "#f43f5e", "#a3a3a3",
 ];
 
+// Cores fixas por gangue (pedido da Ana) — gangues fora dessa lista caem no PALETTE cíclico.
+const GANGUE_COLORS: Record<string, string> = {
+  "Nox": "#ef4444",
+  "Hydra": "#ef4444",
+  "Nekutai": "#ef4444",
+  "Void": "#3b82f6",
+  "Hells": "#ec4899",
+  "Águias": "#9ca3af",
+  "Meraki": "#eab308",
+  "Vagos": "#eab308",
+  "Vendetta": "#f97316",
+  "Ballas": "#a855f7",
+  "La Guardia": "#a855f7",
+  "Aura": "#a855f7",
+  "Domus": "#9ca3af",
+  "Pista": "#9ca3af",
+  "Black Heart": "#4b5563",
+  "Families": "#22c55e",
+  "Cartel": "#f5f5f5",
+  "Ruptura": "#f97316",
+  "Leviată": "#06b6d4",
+  "Legacy": "#3b82f6",
+};
+
 const EMPTY_FORM = {
   data: new Date().toISOString().slice(0, 10),
   acaoId: null as string | null,
@@ -847,7 +871,7 @@ const Operacoes = () => {
                           <YAxis type="category" dataKey="nome" width={90} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
                           <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
                           <Bar dataKey="total" radius={[0, 4, 4, 0]}>
-                            {gangueChartData.map((d, i) => <Cell key={d.nome} fill={PALETTE[i % PALETTE.length]} />)}
+                            {gangueChartData.map((d, i) => <Cell key={d.nome} fill={GANGUE_COLORS[d.nome] ?? PALETTE[i % PALETTE.length]} />)}
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>
