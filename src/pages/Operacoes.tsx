@@ -59,9 +59,9 @@ const PALETTE = [
 
 // Cores fixas por gangue (pedido da Ana) — gangues fora dessa lista caem no PALETTE cíclico.
 const GANGUE_COLORS: Record<string, string> = {
-  "Nox": "#ef4444",
-  "Hydra": "#ef4444",
-  "Nekutai": "#ef4444",
+  "Nox": "#a30000",
+  "Hydra": "#a30000",
+  "Nekutai": "#a30000",
   "Void": "#3b82f6",
   "Hells": "#ec4899",
   "Águias": "#9ca3af",
