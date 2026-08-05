@@ -303,6 +303,28 @@ const Operacoes = () => {
     },
   });
 
+  const renameGangue = useMutation({
+    mutationFn: async ({ id, nome }: { id: string; nome: string }) => {
+      const { error } = await supabase.from("gangues").update({ nome }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["gangues"] });
+      queryClient.invalidateQueries({ queryKey: ["operacoes"] });
+    },
+  });
+
+  const deleteGangue = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("gangues").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["gangues"] });
+      queryClient.invalidateQueries({ queryKey: ["operacoes"] });
+    },
+  });
+
   const createOperacao = useMutation({
     mutationFn: async (form: typeof EMPTY_FORM) => {
       const operacaoId = crypto.randomUUID();
@@ -439,6 +461,9 @@ const Operacoes = () => {
   const [renameCETarget, setRenameCETarget] = useState<Option | null>(null);
   const [renameCEValue, setRenameCEValue] = useState("");
   const [deleteCETarget, setDeleteCETarget] = useState<Option | null>(null);
+  const [renameGangueTarget, setRenameGangueTarget] = useState<Option | null>(null);
+  const [renameGangueValue, setRenameGangueValue] = useState("");
+  const [deleteGangueTarget, setDeleteGangueTarget] = useState<Option | null>(null);
   const [mesFiltro, setMesFiltro] = useState("");
   const [operadorFiltro, setOperadorFiltro] = useState("");
   const [acaoFiltro, setAcaoFiltro] = useState("");
@@ -689,6 +714,8 @@ const Operacoes = () => {
               value={form.gangueIds}
               onChange={(ids) => setForm((f) => ({ ...f, gangueIds: ids }))}
               onCreate={createLookup("gangues")}
+              onRename={isComando ? (o) => { setRenameGangueTarget(o); setRenameGangueValue(o.nome); } : undefined}
+              onDelete={isComando ? (o) => setDeleteGangueTarget(o) : undefined}
               placeholder="Selecione ou crie uma gangue"
             />
           </div>
@@ -1016,6 +1043,8 @@ const Operacoes = () => {
                   value={editForm.gangueIds}
                   onChange={(ids) => setEditForm((f) => ({ ...f, gangueIds: ids }))}
                   onCreate={createLookup("gangues")}
+                  onRename={isComando ? (o) => { setRenameGangueTarget(o); setRenameGangueValue(o.nome); } : undefined}
+                  onDelete={isComando ? (o) => setDeleteGangueTarget(o) : undefined}
                   placeholder="Selecione ou crie uma gangue"
                 />
               </div>
@@ -1103,6 +1132,52 @@ const Operacoes = () => {
               onClick={() => deleteComandoExterno.mutate(deleteCETarget!.id, { onSuccess: () => setDeleteCETarget(null) })}
             >
               {deleteComandoExterno.isPending ? "Excluindo..." : "Excluir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!renameGangueTarget} onOpenChange={(open) => !open && setRenameGangueTarget(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display tracking-wider">Renomear Gangue</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Nome</Label>
+            <Input value={renameGangueValue} onChange={(e) => setRenameGangueValue(e.target.value)} className="bg-muted/50" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameGangueTarget(null)}>Cancelar</Button>
+            <Button
+              disabled={renameGangue.isPending || !renameGangueValue.trim()}
+              onClick={() => renameGangue.mutate(
+                { id: renameGangueTarget!.id, nome: renameGangueValue.trim() },
+                { onSuccess: () => setRenameGangueTarget(null) }
+              )}
+            >
+              {renameGangue.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteGangueTarget} onOpenChange={(open) => !open && setDeleteGangueTarget(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display tracking-wider">Excluir Gangue</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Tem certeza que deseja excluir <span className="font-medium text-foreground">{deleteGangueTarget?.nome}</span>?
+            Ela é removida das ações que a usavam, mas as ações continuam existindo.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteGangueTarget(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteGangue.isPending}
+              onClick={() => deleteGangue.mutate(deleteGangueTarget!.id, { onSuccess: () => setDeleteGangueTarget(null) })}
+            >
+              {deleteGangue.isPending ? "Excluindo..." : "Excluir"}
             </Button>
           </DialogFooter>
         </DialogContent>
