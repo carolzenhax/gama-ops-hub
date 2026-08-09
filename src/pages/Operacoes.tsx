@@ -22,6 +22,10 @@ import { MultiSelect } from "@/components/MultiSelect";
 
 interface Option { id: string; nome: string; }
 
+// Comando da Ação / Participantes: id fica null quando o membro foi apagado do
+// roster depois — o nome (retrato do momento do registro) continua aparecendo.
+interface Pessoa { id: string | null; nome: string; }
+
 interface Observacao {
   id: string;
   texto: string;
@@ -37,10 +41,10 @@ interface Operacao {
   created_at: string;
   acao: Option | null;
   loja: Option | null;
-  comandos: Option[];
+  comandos: Pessoa[];
   comandosExternos: Option[];
   gangues: Option[];
-  participantes: Option[];
+  participantes: Pessoa[];
   criadoPor: string | null;
   observacoes: Observacao[];
 }
@@ -114,8 +118,8 @@ async function fetchOperacoes(): Promise<Operacao[]> {
       loja:lojas(id, nome),
       criado_por_perfil:profiles!operacoes_criado_por_fkey(nome),
       operacoes_gangues(gangue:gangues(id, nome)),
-      operacoes_participantes(membro:membros!operacoes_participantes_membro_id_fkey(id, nome)),
-      operacoes_comandos(membro:membros!operacoes_comandos_membro_id_fkey(id, nome)),
+      operacoes_participantes(nome_snapshot, membro:membros!operacoes_participantes_membro_id_fkey(id, nome)),
+      operacoes_comandos(nome_snapshot, membro:membros!operacoes_comandos_membro_id_fkey(id, nome)),
       operacoes_comandos_externos(comandoExterno:comandos_externos(id, nome)),
       operacoes_observacoes(id, texto, created_at, autor:profiles!operacoes_observacoes_autor_id_fkey(nome))
     `)
@@ -127,16 +131,16 @@ async function fetchOperacoes(): Promise<Operacao[]> {
     acao: Option | null; loja: Option | null;
     criado_por_perfil: { nome: string } | null;
     operacoes_gangues: { gangue: Option }[];
-    operacoes_participantes: { membro: Option }[];
-    operacoes_comandos: { membro: Option }[];
+    operacoes_participantes: { nome_snapshot: string; membro: Option | null }[];
+    operacoes_comandos: { nome_snapshot: string; membro: Option | null }[];
     operacoes_comandos_externos: { comandoExterno: Option }[];
     operacoes_observacoes: { id: string; texto: string; created_at: string; autor: { nome: string } | null }[];
   }>).map((row) => ({
     id: row.id, data: row.data, resultado: row.resultado, detalhes: row.detalhes, created_at: row.created_at,
     acao: row.acao, loja: row.loja,
     gangues: row.operacoes_gangues.map((g) => g.gangue),
-    participantes: row.operacoes_participantes.map((p) => p.membro),
-    comandos: row.operacoes_comandos.map((c) => c.membro),
+    participantes: row.operacoes_participantes.map((p) => ({ id: p.membro?.id ?? null, nome: p.membro?.nome ?? p.nome_snapshot })),
+    comandos: row.operacoes_comandos.map((c) => ({ id: c.membro?.id ?? null, nome: c.membro?.nome ?? c.nome_snapshot })),
     comandosExternos: row.operacoes_comandos_externos.map((c) => c.comandoExterno),
     criadoPor: row.criado_por_perfil?.nome ?? null,
     observacoes: row.operacoes_observacoes
@@ -257,6 +261,7 @@ const Operacoes = () => {
   const { data: gangues = [] } = useQuery({ queryKey: ["gangues"], queryFn: () => fetchLookup("gangues") });
   const { data: comandosExternos = [] } = useQuery({ queryKey: ["comandos_externos"], queryFn: () => fetchLookup("comandos_externos") });
   const { data: membrosOptions = [] } = useQuery({ queryKey: ["membros_options"], queryFn: fetchMembroOptions });
+  const nomeDoMembro = (id: string) => membrosOptions.find((m) => m.id === id)?.nome ?? "";
   const { data: operacoes = [], isLoading: loadingOperacoes } = useQuery({
     queryKey: ["operacoes"],
     queryFn: fetchOperacoes,
@@ -325,6 +330,28 @@ const Operacoes = () => {
     },
   });
 
+  const renameMembro = useMutation({
+    mutationFn: async ({ id, nome }: { id: string; nome: string }) => {
+      const { error } = await supabase.from("membros").update({ nome }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["membros_options"] });
+      queryClient.invalidateQueries({ queryKey: ["operacoes"] });
+    },
+  });
+
+  const deleteMembro = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("membros").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["membros_options"] });
+      queryClient.invalidateQueries({ queryKey: ["operacoes"] });
+    },
+  });
+
   const createOperacao = useMutation({
     mutationFn: async (form: typeof EMPTY_FORM) => {
       const operacaoId = crypto.randomUUID();
@@ -341,7 +368,7 @@ const Operacoes = () => {
       if (form.comandoIds.length) {
         const { error: cError } = await supabase
           .from("operacoes_comandos")
-          .insert(form.comandoIds.map((membro_id) => ({ operacao_id: operacaoId, membro_id })));
+          .insert(form.comandoIds.map((membro_id) => ({ operacao_id: operacaoId, membro_id, nome_snapshot: nomeDoMembro(membro_id) })));
         if (cError) throw cError;
       }
       if (form.comandoExternoIds.length) {
@@ -353,7 +380,7 @@ const Operacoes = () => {
       if (form.participanteIds.length) {
         const { error: pError } = await supabase
           .from("operacoes_participantes")
-          .insert(form.participanteIds.map((membro_id) => ({ operacao_id: operacaoId, membro_id })));
+          .insert(form.participanteIds.map((membro_id) => ({ operacao_id: operacaoId, membro_id, nome_snapshot: nomeDoMembro(membro_id) })));
         if (pError) throw pError;
       }
       if (form.gangueIds.length) {
@@ -383,12 +410,14 @@ const Operacoes = () => {
       }).eq("id", id);
       if (error) throw error;
 
-      const { error: delCError } = await supabase.from("operacoes_comandos").delete().eq("operacao_id", id);
+      // Só apaga vínculos ativos (membro_id preenchido) — vínculos de membros já
+      // apagados (membro_id nulo, nome preservado em nome_snapshot) ficam intactos.
+      const { error: delCError } = await supabase.from("operacoes_comandos").delete().eq("operacao_id", id).not("membro_id", "is", null);
       if (delCError) throw delCError;
       if (form.comandoIds.length) {
         const { error: cError } = await supabase
           .from("operacoes_comandos")
-          .insert(form.comandoIds.map((membro_id) => ({ operacao_id: id, membro_id })));
+          .insert(form.comandoIds.map((membro_id) => ({ operacao_id: id, membro_id, nome_snapshot: nomeDoMembro(membro_id) })));
         if (cError) throw cError;
       }
 
@@ -401,12 +430,12 @@ const Operacoes = () => {
         if (ceError) throw ceError;
       }
 
-      const { error: delPError } = await supabase.from("operacoes_participantes").delete().eq("operacao_id", id);
+      const { error: delPError } = await supabase.from("operacoes_participantes").delete().eq("operacao_id", id).not("membro_id", "is", null);
       if (delPError) throw delPError;
       if (form.participanteIds.length) {
         const { error: pError } = await supabase
           .from("operacoes_participantes")
-          .insert(form.participanteIds.map((membro_id) => ({ operacao_id: id, membro_id })));
+          .insert(form.participanteIds.map((membro_id) => ({ operacao_id: id, membro_id, nome_snapshot: nomeDoMembro(membro_id) })));
         if (pError) throw pError;
       }
 
@@ -464,6 +493,9 @@ const Operacoes = () => {
   const [renameGangueTarget, setRenameGangueTarget] = useState<Option | null>(null);
   const [renameGangueValue, setRenameGangueValue] = useState("");
   const [deleteGangueTarget, setDeleteGangueTarget] = useState<Option | null>(null);
+  const [renameMembroTarget, setRenameMembroTarget] = useState<Option | null>(null);
+  const [renameMembroValue, setRenameMembroValue] = useState("");
+  const [deleteMembroTarget, setDeleteMembroTarget] = useState<Option | null>(null);
   const [mesFiltro, setMesFiltro] = useState("");
   const [operadorFiltro, setOperadorFiltro] = useState("");
   const [acaoFiltro, setAcaoFiltro] = useState("");
@@ -487,9 +519,9 @@ const Operacoes = () => {
       acaoId: op.acao?.id ?? null,
       lojaId: op.loja?.id ?? null,
       resultado: op.resultado,
-      comandoIds: op.comandos.map((c) => c.id),
+      comandoIds: op.comandos.map((c) => c.id).filter((id): id is string => id !== null),
       comandoExternoIds: op.comandosExternos.map((c) => c.id),
-      participanteIds: op.participantes.map((p) => p.id),
+      participanteIds: op.participantes.map((p) => p.id).filter((id): id is string => id !== null),
       gangueIds: op.gangues.map((g) => g.id),
       detalhes: op.detalhes,
     });
@@ -678,6 +710,8 @@ const Operacoes = () => {
               options={membrosOptions}
               value={form.comandoIds}
               onChange={(ids) => setForm((f) => ({ ...f, comandoIds: ids }))}
+              onRename={isComando ? (o) => { setRenameMembroTarget(o); setRenameMembroValue(o.nome); } : undefined}
+              onDelete={isComando ? (o) => setDeleteMembroTarget(o) : undefined}
               placeholder="Selecione quem comandou"
             />
           </div>
@@ -704,6 +738,8 @@ const Operacoes = () => {
               value={form.participanteIds}
               onChange={(ids) => setForm((f) => ({ ...f, participanteIds: ids }))}
               onCreate={createMembro}
+              onRename={isComando ? (o) => { setRenameMembroTarget(o); setRenameMembroValue(o.nome); } : undefined}
+              onDelete={isComando ? (o) => setDeleteMembroTarget(o) : undefined}
               placeholder="Selecione ou crie um participante"
             />
           </div>
@@ -1007,6 +1043,8 @@ const Operacoes = () => {
                   options={membrosOptions}
                   value={editForm.comandoIds}
                   onChange={(ids) => setEditForm((f) => ({ ...f, comandoIds: ids }))}
+                  onRename={isComando ? (o) => { setRenameMembroTarget(o); setRenameMembroValue(o.nome); } : undefined}
+                  onDelete={isComando ? (o) => setDeleteMembroTarget(o) : undefined}
                   placeholder="Selecione quem comandou"
                 />
               </div>
@@ -1033,6 +1071,8 @@ const Operacoes = () => {
                   value={editForm.participanteIds}
                   onChange={(ids) => setEditForm((f) => ({ ...f, participanteIds: ids }))}
                   onCreate={createMembro}
+                  onRename={isComando ? (o) => { setRenameMembroTarget(o); setRenameMembroValue(o.nome); } : undefined}
+                  onDelete={isComando ? (o) => setDeleteMembroTarget(o) : undefined}
                   placeholder="Selecione ou crie um participante"
                 />
               </div>
@@ -1178,6 +1218,52 @@ const Operacoes = () => {
               onClick={() => deleteGangue.mutate(deleteGangueTarget!.id, { onSuccess: () => setDeleteGangueTarget(null) })}
             >
               {deleteGangue.isPending ? "Excluindo..." : "Excluir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!renameMembroTarget} onOpenChange={(open) => !open && setRenameMembroTarget(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display tracking-wider">Renomear Membro</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Nome</Label>
+            <Input value={renameMembroValue} onChange={(e) => setRenameMembroValue(e.target.value)} className="bg-muted/50" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameMembroTarget(null)}>Cancelar</Button>
+            <Button
+              disabled={renameMembro.isPending || !renameMembroValue.trim()}
+              onClick={() => renameMembro.mutate(
+                { id: renameMembroTarget!.id, nome: renameMembroValue.trim() },
+                { onSuccess: () => setRenameMembroTarget(null) }
+              )}
+            >
+              {renameMembro.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteMembroTarget} onOpenChange={(open) => !open && setDeleteMembroTarget(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display tracking-wider">Excluir Membro</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Tem certeza que deseja excluir <span className="font-medium text-foreground">{deleteMembroTarget?.nome}</span>?
+            Isso remove ele de vez da lista de Membros (não só dessa ação) — as ações que ele participou continuam existindo.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteMembroTarget(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMembro.isPending}
+              onClick={() => deleteMembro.mutate(deleteMembroTarget!.id, { onSuccess: () => setDeleteMembroTarget(null) })}
+            >
+              {deleteMembro.isPending ? "Excluindo..." : "Excluir"}
             </Button>
           </DialogFooter>
         </DialogContent>
