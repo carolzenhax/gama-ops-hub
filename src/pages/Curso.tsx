@@ -10,14 +10,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 
-interface Curso { id: string; nome: string; aplicador: string; descricao: string; videoUrl: string; fotoUrl: string | null; }
+interface Curso { id: string; nome: string; aplicador: string; descricao: string; videoUrl: string; fotoUrl: string | null; tipo: string | null; }
 
-const EMPTY_FORM = { nome: "", aplicador: "", descricao: "", videoUrl: "", fotoUrl: "" };
+const TIPO_ORDER = ["Grande", "Média", "Pequena"];
+const SEM_TIPO = "sem-tipo";
+
+const EMPTY_FORM = { nome: "", aplicador: "", descricao: "", videoUrl: "", fotoUrl: "", tipo: "" };
 
 async function fetchCursos(): Promise<Curso[]> {
-  const { data, error } = await supabase.from("cursos").select("id, nome, aplicador, descricao, video_url, foto_url");
+  const { data, error } = await supabase.from("cursos").select("id, nome, aplicador, descricao, video_url, foto_url, tipo");
   if (error) throw error;
-  return data.map((c) => ({ id: c.id, nome: c.nome, aplicador: c.aplicador, descricao: c.descricao, videoUrl: c.video_url, fotoUrl: c.foto_url }));
+  return data.map((c) => ({ id: c.id, nome: c.nome, aplicador: c.aplicador, descricao: c.descricao, videoUrl: c.video_url, fotoUrl: c.foto_url, tipo: c.tipo }));
 }
 
 const Curso = () => {
@@ -30,7 +33,7 @@ const Curso = () => {
 
   const saveCurso = useMutation({
     mutationFn: async ({ id, ...form }: { id?: string } & typeof EMPTY_FORM) => {
-      const payload = { nome: form.nome, aplicador: form.aplicador, descricao: form.descricao, video_url: form.videoUrl, foto_url: form.fotoUrl || null };
+      const payload = { nome: form.nome, aplicador: form.aplicador, descricao: form.descricao, video_url: form.videoUrl, foto_url: form.fotoUrl || null, tipo: form.tipo || null };
       if (id) {
         const { error } = await supabase.from("cursos").update(payload).eq("id", id);
         if (error) throw error;
@@ -62,7 +65,7 @@ const Curso = () => {
 
   const openEdit = (c: Curso) => {
     setEditing(c);
-    setForm({ nome: c.nome, aplicador: c.aplicador, descricao: c.descricao, videoUrl: c.videoUrl, fotoUrl: c.fotoUrl ?? "" });
+    setForm({ nome: c.nome, aplicador: c.aplicador, descricao: c.descricao, videoUrl: c.videoUrl, fotoUrl: c.fotoUrl ?? "", tipo: c.tipo ?? "" });
     setDialogOpen(true);
   };
 
@@ -73,6 +76,66 @@ const Curso = () => {
   };
 
   const handleDelete = (id: string) => deleteCurso.mutate(id);
+
+  const grouped = [
+    ...TIPO_ORDER.map((tipo) => ({ tipo, items: cursos.filter((c) => c.tipo === tipo) })),
+    { tipo: SEM_TIPO, items: cursos.filter((c) => !c.tipo) },
+  ].filter((g) => g.items.length > 0);
+
+  const renderCard = (curso: Curso, i: number) => (
+    <motion.div
+      key={curso.id}
+      className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-primary/40"
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: i * 0.05 }}
+    >
+      <div className="relative aspect-video overflow-hidden bg-muted/30">
+        {curso.fotoUrl ? (
+          <img src={curso.fotoUrl} alt={curso.nome} loading="lazy" className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <BookOpen className="h-8 w-8 text-muted-foreground/40" />
+          </div>
+        )}
+        {isAdmin && (
+          <div className="absolute right-2 top-2 flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+            <button
+              onClick={() => openEdit(curso)}
+              className="rounded-full bg-background/80 p-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => handleDelete(curso.id)}
+              className="rounded-full bg-background/80 p-1.5 text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-1 flex-col p-5">
+        <h3 className="font-display text-sm font-bold tracking-wide text-foreground">{curso.nome}</h3>
+        <p className="mt-0.5 text-xs text-accent">Autor: {curso.aplicador}</p>
+
+        <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground">{curso.descricao}</p>
+
+        {curso.videoUrl && (
+          <a
+            href={curso.videoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-4 flex items-center gap-1.5 text-xs text-primary underline-offset-4 hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> Acessar documento
+          </a>
+        )}
+      </div>
+    </motion.div>
+  );
 
   return (
     <div className="space-y-6">
@@ -88,64 +151,24 @@ const Curso = () => {
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {isLoading
-          ? [1, 2, 3].map((i) => <div key={i} className="h-40 animate-pulse rounded-xl border border-border bg-muted/30" />)
-          : cursos.map((curso, i) => (
-          <motion.div
-            key={curso.id}
-            className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-primary/40"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.08 }}
-          >
-            <div className="relative aspect-video overflow-hidden bg-muted/30">
-              {curso.fotoUrl ? (
-                <img src={curso.fotoUrl} alt={curso.nome} loading="lazy" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <BookOpen className="h-8 w-8 text-muted-foreground/40" />
-                </div>
-              )}
-              {isAdmin && (
-                <div className="absolute right-2 top-2 flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
-                  <button
-                    onClick={() => openEdit(curso)}
-                    className="rounded-full bg-background/80 p-1.5 text-muted-foreground hover:text-foreground"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(curso.id)}
-                    className="rounded-full bg-background/80 p-1.5 text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
+      {isLoading ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => <div key={i} className="h-40 animate-pulse rounded-xl border border-border bg-muted/30" />)}
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {grouped.map((g) => (
+            <div key={g.tipo} className="space-y-3">
+              <h2 className="font-display text-xs font-bold uppercase tracking-widest text-accent">
+                {g.tipo === SEM_TIPO ? "Sem Categoria" : g.tipo} <span className="text-muted-foreground">({g.items.length})</span>
+              </h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {g.items.map((curso, i) => renderCard(curso, i))}
+              </div>
             </div>
-
-            <div className="flex flex-1 flex-col p-5">
-              <h3 className="font-display text-sm font-bold tracking-wide text-foreground">{curso.nome}</h3>
-              <p className="mt-0.5 text-xs text-accent">Autor: {curso.aplicador}</p>
-
-              <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground">{curso.descricao}</p>
-
-              {curso.videoUrl && (
-                <a
-                  href={curso.videoUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-4 flex items-center gap-1.5 text-xs text-primary underline-offset-4 hover:underline"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <ExternalLink className="h-3.5 w-3.5" /> Acessar documento
-                </a>
-              )}
-            </div>
-          </motion.div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
@@ -172,6 +195,17 @@ const Curso = () => {
             <div className="space-y-2">
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">URL da Foto (opcional)</Label>
               <Input value={form.fotoUrl} onChange={(e) => setForm((f) => ({ ...f, fotoUrl: e.target.value }))} placeholder="https://..." className="bg-muted/50" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Tipo da Ação (opcional)</Label>
+              <select
+                value={form.tipo}
+                onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value }))}
+                className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground"
+              >
+                <option value="">Sem categoria</option>
+                {TIPO_ORDER.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
             </div>
           </div>
           <DialogFooter>
