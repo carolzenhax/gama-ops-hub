@@ -788,7 +788,7 @@ const Operacoes = () => {
               <div key={op.id} className="rounded-xl border border-border bg-card p-4">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="font-display text-xs text-accent">{format(parseISO(op.data), "dd/MM/yyyy")}</span>
+                    <span className="font-display text-xs text-muted-foreground">{format(parseISO(op.data), "dd/MM/yyyy")}</span>
                     <span className="font-display text-sm font-bold">{op.acao?.nome}{op.loja ? ` — ${op.loja.nome}` : ""}</span>
                   </div>
                   <span
@@ -949,7 +949,7 @@ const Operacoes = () => {
                       <div key={op.id} className="rounded-xl border border-border bg-card p-4">
                         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <span className="font-display text-xs text-accent">{format(parseISO(op.data), "dd/MM/yyyy")}</span>
+                            <span className="font-display text-xs text-muted-foreground">{format(parseISO(op.data), "dd/MM/yyyy")}</span>
                             <span className="font-display text-sm font-bold">{op.acao?.nome}{op.loja ? ` — ${op.loja.nome}` : ""}</span>
                           </div>
                           <div className="flex shrink-0 items-center gap-3">
