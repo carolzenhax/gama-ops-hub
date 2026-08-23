@@ -500,6 +500,10 @@ const Operacoes = () => {
   const [operadorFiltro, setOperadorFiltro] = useState("");
   const [acaoFiltro, setAcaoFiltro] = useState("");
   const [gangueFiltro, setGangueFiltro] = useState("");
+  const [relatorioOrdem, setRelatorioOrdem] = useState<"recente" | "antigo">("recente");
+  const [relatorioDataDe, setRelatorioDataDe] = useState("");
+  const [relatorioDataAte, setRelatorioDataAte] = useState("");
+  const [relatorioMembroFiltro, setRelatorioMembroFiltro] = useState("");
   const [exportingPdf, setExportingPdf] = useState(false);
   const chartsRef = useRef<HTMLDivElement>(null);
 
@@ -545,6 +549,21 @@ const Operacoes = () => {
       return true;
     });
   }, [operacoes, mesFiltro, operadorFiltro, acaoFiltro, gangueFiltro]);
+
+  const relatoriosFiltrados = useMemo(() => {
+    const filtrados = operacoes.filter((o) => {
+      if (relatorioDataDe && o.data < relatorioDataDe) return false;
+      if (relatorioDataAte && o.data > relatorioDataAte) return false;
+      if (relatorioMembroFiltro) {
+        const naLista = [...o.participantes, ...o.comandos].some((p) => p.id === relatorioMembroFiltro);
+        if (!naLista) return false;
+      }
+      return true;
+    });
+    return filtrados.sort((a, b) =>
+      relatorioOrdem === "recente" ? b.data.localeCompare(a.data) : a.data.localeCompare(b.data)
+    );
+  }, [operacoes, relatorioDataDe, relatorioDataAte, relatorioMembroFiltro, relatorioOrdem]);
 
   const acoesChartData = useMemo(() => {
     const counts = new Map<string, number>();
@@ -776,6 +795,54 @@ const Operacoes = () => {
       {user?.papel === "membro" && (
         <div className="space-y-3">
           <h2 className="font-display text-sm font-bold uppercase tracking-wider">Relatórios</h2>
+
+          {!loadingOperacoes && operacoes.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4">
+              <select
+                value={relatorioOrdem}
+                onChange={(e) => setRelatorioOrdem(e.target.value as "recente" | "antigo")}
+                className="rounded-md border border-border bg-muted/50 px-2 py-1.5 text-xs text-foreground"
+              >
+                <option value="recente">Mais recente primeiro</option>
+                <option value="antigo">Mais antigo primeiro</option>
+              </select>
+              <div className="flex items-center gap-1.5">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">De</Label>
+                <Input
+                  type="date"
+                  value={relatorioDataDe}
+                  onChange={(e) => setRelatorioDataDe(e.target.value)}
+                  className="w-auto bg-muted/50 text-xs"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Até</Label>
+                <Input
+                  type="date"
+                  value={relatorioDataAte}
+                  onChange={(e) => setRelatorioDataAte(e.target.value)}
+                  className="w-auto bg-muted/50 text-xs"
+                />
+              </div>
+              <select
+                value={relatorioMembroFiltro}
+                onChange={(e) => setRelatorioMembroFiltro(e.target.value)}
+                className="rounded-md border border-border bg-muted/50 px-2 py-1.5 text-xs text-foreground"
+              >
+                <option value="">Todos os membros</option>
+                {membrosOptions.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
+              </select>
+              {(relatorioDataDe || relatorioDataAte || relatorioMembroFiltro) && (
+                <button
+                  onClick={() => { setRelatorioDataDe(""); setRelatorioDataAte(""); setRelatorioMembroFiltro(""); }}
+                  className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+                >
+                  Limpar filtros
+                </button>
+              )}
+            </div>
+          )}
+
           {loadingOperacoes ? (
             <div className="h-24 animate-pulse rounded-xl border border-border bg-muted/30" />
           ) : operacoes.length === 0 ? (
@@ -783,8 +850,13 @@ const Operacoes = () => {
               <Target className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
               <p className="text-sm text-muted-foreground">Nenhum relatório seu ou de ações que você participou ainda.</p>
             </div>
+          ) : relatoriosFiltrados.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card p-8 text-center">
+              <Target className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">Nenhum relatório encontrado com esse filtro.</p>
+            </div>
           ) : (
-            operacoes.map((op) => (
+            relatoriosFiltrados.map((op) => (
               <div key={op.id} className="rounded-xl border border-border bg-card p-4">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
