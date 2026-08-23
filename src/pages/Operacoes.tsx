@@ -497,6 +497,9 @@ const Operacoes = () => {
   const [renameMembroValue, setRenameMembroValue] = useState("");
   const [deleteMembroTarget, setDeleteMembroTarget] = useState<Option | null>(null);
   const [mesFiltro, setMesFiltro] = useState("");
+  const [dataDeFiltro, setDataDeFiltro] = useState("");
+  const [dataAteFiltro, setDataAteFiltro] = useState("");
+  const [historicoOrdem, setHistoricoOrdem] = useState<"recente" | "antigo">("recente");
   const [operadorFiltro, setOperadorFiltro] = useState("");
   const [acaoFiltro, setAcaoFiltro] = useState("");
   const [gangueFiltro, setGangueFiltro] = useState("");
@@ -541,14 +544,19 @@ const Operacoes = () => {
   const editPrecisaLoja = editAcaoSelecionada?.nome === "Loja de Departamento";
 
   const operacoesFiltradas = useMemo(() => {
-    return operacoes.filter((o) => {
+    const filtradas = operacoes.filter((o) => {
       if (mesFiltro && !o.data.startsWith(mesFiltro)) return false;
-      if (operadorFiltro && !o.participantes.some((p) => p.id === operadorFiltro)) return false;
+      if (dataDeFiltro && o.data < dataDeFiltro) return false;
+      if (dataAteFiltro && o.data > dataAteFiltro) return false;
+      if (operadorFiltro && ![...o.participantes, ...o.comandos].some((p) => p.id === operadorFiltro)) return false;
       if (acaoFiltro && o.acao?.id !== acaoFiltro) return false;
       if (gangueFiltro && !o.gangues.some((g) => g.id === gangueFiltro)) return false;
       return true;
     });
-  }, [operacoes, mesFiltro, operadorFiltro, acaoFiltro, gangueFiltro]);
+    return filtradas.sort((a, b) =>
+      historicoOrdem === "recente" ? b.data.localeCompare(a.data) : a.data.localeCompare(b.data)
+    );
+  }, [operacoes, mesFiltro, dataDeFiltro, dataAteFiltro, operadorFiltro, acaoFiltro, gangueFiltro, historicoOrdem]);
 
   const relatoriosFiltrados = useMemo(() => {
     const filtrados = operacoes.filter((o) => {
@@ -945,13 +953,50 @@ const Operacoes = () => {
               </div>
 
               <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4">
+                <select
+                  value={historicoOrdem}
+                  onChange={(e) => setHistoricoOrdem(e.target.value as "recente" | "antigo")}
+                  className="rounded-md border border-border bg-muted/50 px-2 py-1.5 text-xs text-foreground"
+                >
+                  <option value="recente">Mais recente primeiro</option>
+                  <option value="antigo">Mais antigo primeiro</option>
+                </select>
+                <div className="flex items-center gap-1.5">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">De</Label>
+                  <Input
+                    type="date"
+                    value={dataDeFiltro}
+                    onChange={(e) => setDataDeFiltro(e.target.value)}
+                    className="w-auto bg-muted/50 text-xs"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Até</Label>
+                  <Input
+                    type="date"
+                    value={dataAteFiltro}
+                    onChange={(e) => setDataAteFiltro(e.target.value)}
+                    className="w-auto bg-muted/50 text-xs"
+                  />
+                </div>
+                {(dataDeFiltro || dataAteFiltro) && (
+                  <button
+                    onClick={() => { setDataDeFiltro(""); setDataAteFiltro(""); }}
+                    className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+                  >
+                    Limpar datas
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">Filtrar gráficos</Label>
                 <select
                   value={operadorFiltro}
                   onChange={(e) => setOperadorFiltro(e.target.value)}
                   className="rounded-md border border-border bg-muted/50 px-2 py-1.5 text-xs text-foreground"
                 >
-                  <option value="">Todos os operadores</option>
+                  <option value="">Todos os membros</option>
                   {membrosOptions.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
                 </select>
                 <select
