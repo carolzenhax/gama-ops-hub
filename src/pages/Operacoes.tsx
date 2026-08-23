@@ -869,8 +869,9 @@ const Operacoes = () => {
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <span className="font-display text-xs text-muted-foreground">{format(parseISO(op.data), "dd/MM/yyyy")}</span>
                   <span className="font-display text-sm font-bold">{op.acao?.nome}{op.loja ? ` — ${op.loja.nome}` : ""}</span>
+                  <span className="font-display text-sm font-bold">-</span>
                   <span
-                    className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider"
+                    className="rounded-full px-2 py-0.5 text-sm uppercase tracking-wider"
                     style={{ backgroundColor: `${RESULTADO_COLORS[op.resultado]}33`, color: RESULTADO_COLORS[op.resultado] }}
                   >
                     {op.resultado}
@@ -1067,8 +1068,9 @@ const Operacoes = () => {
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-display text-xs text-muted-foreground">{format(parseISO(op.data), "dd/MM/yyyy")}</span>
                             <span className="font-display text-sm font-bold">{op.acao?.nome}{op.loja ? ` — ${op.loja.nome}` : ""}</span>
+                            <span className="font-display text-sm font-bold">-</span>
                             <span
-                              className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider"
+                              className="rounded-full px-2 py-0.5 text-sm uppercase tracking-wider"
                               style={{ backgroundColor: `${RESULTADO_COLORS[op.resultado]}33`, color: RESULTADO_COLORS[op.resultado] }}
                             >
                               {op.resultado}
