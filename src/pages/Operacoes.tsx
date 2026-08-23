@@ -953,43 +953,6 @@ const Operacoes = () => {
               </div>
 
               <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4">
-                <select
-                  value={historicoOrdem}
-                  onChange={(e) => setHistoricoOrdem(e.target.value as "recente" | "antigo")}
-                  className="rounded-md border border-border bg-muted/50 px-2 py-1.5 text-xs text-foreground"
-                >
-                  <option value="recente">Mais recente primeiro</option>
-                  <option value="antigo">Mais antigo primeiro</option>
-                </select>
-                <div className="flex items-center gap-1.5">
-                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">De</Label>
-                  <Input
-                    type="date"
-                    value={dataDeFiltro}
-                    onChange={(e) => setDataDeFiltro(e.target.value)}
-                    className="w-auto bg-muted/50 text-xs"
-                  />
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Até</Label>
-                  <Input
-                    type="date"
-                    value={dataAteFiltro}
-                    onChange={(e) => setDataAteFiltro(e.target.value)}
-                    className="w-auto bg-muted/50 text-xs"
-                  />
-                </div>
-                {(dataDeFiltro || dataAteFiltro) && (
-                  <button
-                    onClick={() => { setDataDeFiltro(""); setDataAteFiltro(""); }}
-                    className="text-xs text-muted-foreground underline-offset-4 hover:underline"
-                  >
-                    Limpar datas
-                  </button>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">Filtrar gráficos</Label>
                 <select
                   value={operadorFiltro}
@@ -1061,7 +1024,45 @@ const Operacoes = () => {
                   </div>
 
                   <div className="space-y-3">
-                    <h2 className="font-display text-sm font-bold uppercase tracking-wider">Histórico de Ações</h2>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h2 className="font-display text-sm font-bold uppercase tracking-wider">Histórico de Ações</h2>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <select
+                          value={historicoOrdem}
+                          onChange={(e) => setHistoricoOrdem(e.target.value as "recente" | "antigo")}
+                          className="rounded-md border border-border bg-muted/50 px-2 py-1.5 text-xs text-foreground"
+                        >
+                          <option value="recente">Mais recente primeiro</option>
+                          <option value="antigo">Mais antigo primeiro</option>
+                        </select>
+                        <div className="flex items-center gap-1.5">
+                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">De</Label>
+                          <Input
+                            type="date"
+                            value={dataDeFiltro}
+                            onChange={(e) => setDataDeFiltro(e.target.value)}
+                            className="w-auto bg-muted/50 text-xs"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">Até</Label>
+                          <Input
+                            type="date"
+                            value={dataAteFiltro}
+                            onChange={(e) => setDataAteFiltro(e.target.value)}
+                            className="w-auto bg-muted/50 text-xs"
+                          />
+                        </div>
+                        {(dataDeFiltro || dataAteFiltro) && (
+                          <button
+                            onClick={() => { setDataDeFiltro(""); setDataAteFiltro(""); }}
+                            className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+                          >
+                            Limpar datas
+                          </button>
+                        )}
+                      </div>
+                    </div>
                     {operacoesFiltradas.map((op) => (
                       <div key={op.id} className="rounded-xl border border-border bg-card p-4">
                         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
