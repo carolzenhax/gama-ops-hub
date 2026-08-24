@@ -870,8 +870,12 @@ const Operacoes = () => {
                   <span className="font-display text-xs text-muted-foreground">{format(parseISO(op.data), "dd/MM/yyyy")}</span>
                   <span className="font-display text-sm font-bold">{op.acao?.nome}{op.loja ? ` — ${op.loja.nome}` : ""}</span>
                   <span
-                    className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider"
-                    style={{ backgroundColor: `${RESULTADO_COLORS[op.resultado]}33`, color: RESULTADO_COLORS[op.resultado] }}
+                    className="rounded-md border px-2 py-0.5 text-xs font-bold uppercase tracking-wider"
+                    style={{
+                      backgroundColor: `${RESULTADO_COLORS[op.resultado]}22`,
+                      color: RESULTADO_COLORS[op.resultado],
+                      borderColor: `${RESULTADO_COLORS[op.resultado]}66`,
+                    }}
                   >
                     {op.resultado}
                   </span>
@@ -1068,8 +1072,12 @@ const Operacoes = () => {
                             <span className="font-display text-xs text-muted-foreground">{format(parseISO(op.data), "dd/MM/yyyy")}</span>
                             <span className="font-display text-sm font-bold">{op.acao?.nome}{op.loja ? ` — ${op.loja.nome}` : ""}</span>
                             <span
-                              className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider"
-                              style={{ backgroundColor: `${RESULTADO_COLORS[op.resultado]}33`, color: RESULTADO_COLORS[op.resultado] }}
+                              className="rounded-md border px-2 py-0.5 text-xs font-bold uppercase tracking-wider"
+                              style={{
+                                backgroundColor: `${RESULTADO_COLORS[op.resultado]}22`,
+                                color: RESULTADO_COLORS[op.resultado],
+                                borderColor: `${RESULTADO_COLORS[op.resultado]}66`,
+                              }}
                             >
                               {op.resultado}
                             </span>
